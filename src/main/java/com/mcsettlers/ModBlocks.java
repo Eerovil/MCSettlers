@@ -13,6 +13,6 @@ public class ModBlocks {
     );
 
     public static void registerBlocks() {
-        Registry.register(Registries.BLOCK, new Identifier("mcsettlers", "axe_workstation"), AXE_WORKSTATION);
+        Registry.register(Registries.BLOCK, Identifier.of("mcsettlers", "axe_workstation"), AXE_WORKSTATION);
     }
 }

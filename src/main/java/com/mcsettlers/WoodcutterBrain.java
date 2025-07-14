@@ -11,7 +11,7 @@ import net.minecraft.util.math.Vec3d;
 public class WoodcutterBrain {
     public static void tick(VillagerEntity villager, ServerWorld world) {
         BlockPos workstation = villager.getBrain().getOptionalMemory(MemoryModuleType.JOB_SITE)
-            .map(GlobalPos::getPos)
+            .map(GlobalPos::pos)
             .orElse(null);
         if (workstation == null) return;
 

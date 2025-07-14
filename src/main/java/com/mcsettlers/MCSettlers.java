@@ -16,16 +16,18 @@ public class MCSettlers implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		Identifier test = new Identifier("mcsettlers", "test_block");
-		System.out.println(test.toString());
-
 		ModBlocks.registerBlocks();
 		ModPOIs.register();
 		ModProfessions.register();
 
 		ServerTickEvents.END_WORLD_TICK.register(world -> {
-			for (VillagerEntity villager : world.getEntitiesByClass(VillagerEntity.class, entity -> 
-					entity.getVillagerData().getProfession() == ModProfessions.WOODCUTTER)) {
+			BlockPos center = BlockPos.ORIGIN; // optionally use player pos, or iterate all villages
+			Box area = new Box(center).expand(128); // set radius appropriately
+
+			for (VillagerEntity villager : world.getEntitiesByClass(
+					VillagerEntity.class,
+					area,
+					v -> v.getVillagerData().profession().value() == ModProfessions.WOODCUTTER)) {
 				WoodcutterBrain.tick(villager, world);
 			}
 		});

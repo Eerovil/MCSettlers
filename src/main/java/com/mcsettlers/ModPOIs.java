@@ -6,7 +6,7 @@ import net.minecraft.world.poi.PointOfInterestType;
 
 public class ModPOIs {
     public static final PointOfInterestType AXE_WORKSTATION_POI = PointOfInterestHelper.register(
-        new Identifier("mcsettlers", "axe_workstation_poi"),
+        Identifier.of("mcsettlers", "axe_workstation"),
         1, // ticket count
         1, // search distance
         ModBlocks.AXE_WORKSTATION
