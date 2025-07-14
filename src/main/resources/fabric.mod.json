@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "modid",
+	"id": "mcsettlers",
 	"version": "${version}",
 	"name": "Example mod",
 	"description": "This is an example description! Tell everyone what your mod is about!",
@@ -12,20 +12,17 @@
 		"sources": "https://github.com/FabricMC/fabric-example-mod"
 	},
 	"license": "CC0-1.0",
-	"icon": "assets/modid/icon.png",
+	"icon": "assets/mcsettlers/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.ExampleMod"
-		],
-		"client": [
-			"com.example.ExampleModClient"
+			"com.mcsettlers.MCSettlers"
 		]
 	},
 	"mixins": [
-		"modid.mixins.json",
+		"mcsettlers.mixins.json",
 		{
-			"config": "modid.client.mixins.json",
+			"config": "mcsettlers.client.mixins.json",
 			"environment": "client"
 		}
 	],
