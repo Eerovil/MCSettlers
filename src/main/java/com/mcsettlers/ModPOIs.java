@@ -5,14 +5,13 @@ import net.minecraft.util.Identifier;
 import net.minecraft.world.poi.PointOfInterestType;
 
 public class ModPOIs {
-    public static final PointOfInterestType AXE_WORKSTATION_POI = PointOfInterestHelper.register(
-        Identifier.of("mcsettlers", "axe_workstation"),
-        1, // ticket count
-        1, // search distance
-        ModBlocks.AXE_WORKSTATION
-    );
+	public static PointOfInterestType AXE_WORKSTATION_POI;
 
-    public static void register() {
-        // Called from mod init to ensure class loading
-    }
+	public static void register() {
+		AXE_WORKSTATION_POI = PointOfInterestHelper.register(
+			Identifier.of("mcsettlers:axe_workstation_poi"),
+			1, 1,
+			ModBlocks.AXE_WORKSTATION
+		);
+	}
 }
