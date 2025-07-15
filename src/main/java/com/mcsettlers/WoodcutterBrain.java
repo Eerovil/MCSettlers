@@ -47,8 +47,10 @@ public class WoodcutterBrain {
             double dist = villager.squaredDistanceTo(Vec3d.ofCenter(targetLog));
             showDebugInfo(villager, targetLog);
             if (dist > 7) {
-                // Walk to the air block next to the target, not the target itself
-                villager.getNavigation().startMovingTo(targetLog.getX(), targetLog.getY(), targetLog.getZ(), 1.0);
+                // Always try to move under the target block
+                BlockPos underTarget = targetLog.down();
+                brain.remember(MemoryModuleType.WALK_TARGET,
+                    new net.minecraft.entity.ai.brain.WalkTarget(underTarget, 0.6F, 0));
             } else {
                 // Find the actual block to break (the log/leaf adjacent to this air block)
                 BlockPos blockToBreak = null;
@@ -64,6 +66,7 @@ public class WoodcutterBrain {
                     world.breakBlock(blockToBreak, true, villager);
                 }
                 brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
+                brain.forget(MemoryModuleType.WALK_TARGET); // clear walk target
                 showDebugInfo(villager, null);
             }
         } else {
@@ -92,7 +95,7 @@ public class WoodcutterBrain {
         BlockPos.Mutable mutable = new BlockPos.Mutable();
         int r2 = radius * radius;
         for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
+            for (int dy = -radius; dy <= radius; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     if (dx*dx + dy*dy + dz*dz > r2) continue;
                     mutable.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
