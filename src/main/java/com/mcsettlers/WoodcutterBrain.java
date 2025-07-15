@@ -14,6 +14,17 @@ import java.util.Optional;
 public class WoodcutterBrain {
     private static int tickCounter = 0;
 
+    // Find an axe in the villager's inventory
+    private static net.minecraft.item.ItemStack findAxeInInventory(VillagerEntity villager) {
+        for (int i = 0; i < villager.getInventory().size(); i++) {
+            net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
+            if (stack.getItem() instanceof net.minecraft.item.AxeItem) {
+                return stack;
+            }
+        }
+        return net.minecraft.item.ItemStack.EMPTY;
+    }
+
     public static void tick(VillagerEntity villager, ServerWorld world) {
         Brain<?> brain = villager.getBrain();
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
@@ -27,7 +38,10 @@ public class WoodcutterBrain {
         // Only search for new logs or leaves every 10 ticks
         if (needsNewTarget) {
             if (tickCounter % 10 == 0) {
-                targetLog = findNearbyTarget(world, workstation, 10);
+                // Search for targets near the villager, but within the area around the workstation
+                int searchRadius = 10;
+                BlockPos villagerPos = villager.getBlockPos();
+                targetLog = findNearbyTargetPrioritized(world, villagerPos, workstation, searchRadius);
                 if (targetLog != null) {
                     brain.remember(ModMemoryModules.TARGET_LOG, targetLog);
                 } else {
@@ -44,9 +58,10 @@ public class WoodcutterBrain {
         }
         tickCounter++;
         if (targetLog != null) {
-            double dist = villager.squaredDistanceTo(Vec3d.ofCenter(targetLog));
-            showDebugInfo(villager, targetLog);
-            if (dist > 7) {
+            double distSq = villager.squaredDistanceTo(Vec3d.ofCenter(targetLog));
+            double dist = Math.sqrt(distSq);
+            showDebugInfo(villager, targetLog, dist);
+            if (dist > 6) {
                 // Always try to move under the target block
                 BlockPos underTarget = targetLog.down();
                 brain.remember(MemoryModuleType.WALK_TARGET,
@@ -63,7 +78,25 @@ public class WoodcutterBrain {
                     }
                 }
                 if (blockToBreak != null) {
+                    // Axe holding logic
+                    net.minecraft.item.ItemStack axeStack = findAxeInInventory(villager);
+                    if (!axeStack.isEmpty()) {
+                        villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, axeStack);
+                    }
+                    // Animate villager looking at the block
+                    Vec3d blockCenter = Vec3d.ofCenter(blockToBreak);
+                    villager.getLookControl().lookAt(blockCenter.x, blockCenter.y, blockCenter.z);
+                    // Breaking animation logic
+                    for (int progress = 0; progress <= 10; progress++) {
+                        world.setBlockBreakingInfo(villager.getId(), blockToBreak, progress);
+                        // Animate swing arm (if available)
+                        villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+                        try { Thread.sleep(80); } catch (InterruptedException ignored) {}
+                    }
                     world.breakBlock(blockToBreak, true, villager);
+                    world.setBlockBreakingInfo(villager.getId(), blockToBreak, -1); // clear animation
+                    // Remove axe from hand after breaking
+                    villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
                 }
                 brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
                 brain.forget(MemoryModuleType.WALK_TARGET); // clear walk target
@@ -76,7 +109,18 @@ public class WoodcutterBrain {
 
     private static void showDebugInfo(VillagerEntity villager, BlockPos target) {
         if (target != null) {
-            double dist = villager.squaredDistanceTo(Vec3d.ofCenter(target));
+            // Overloaded version expects distance
+            showDebugInfo(villager, target, Math.sqrt(villager.squaredDistanceTo(Vec3d.ofCenter(target))));
+        } else {
+            villager.setCustomName(null);
+            villager.setCustomNameVisible(false);
+        }
+
+    }
+
+    // Overloaded debug info to accept precomputed distance
+    private static void showDebugInfo(VillagerEntity villager, BlockPos target, double dist) {
+        if (target != null) {
             villager.setCustomName(
                 net.minecraft.text.Text.of("Target: " + target.getX() + "," + target.getY() + "," + target.getZ() + " | Dist: " + String.format("%.2f", dist))
             );
@@ -87,8 +131,8 @@ public class WoodcutterBrain {
         }
     }
 
-    private static BlockPos findNearbyTarget(ServerWorld world, BlockPos center, int radius) {
-        BlockPos bestTarget = null;
+    // Search for targets near the villager, but only within the area around the workstation
+    private static BlockPos findNearbyTargetPrioritized(ServerWorld world, BlockPos villagerPos, BlockPos workstation, int radius) {
         BlockPos bestApproach = null;
         double bestDist = Double.MAX_VALUE;
         int bestYDiff = Integer.MAX_VALUE;
@@ -97,8 +141,13 @@ public class WoodcutterBrain {
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = -radius; dy <= radius; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
-                    if (dx*dx + dy*dy + dz*dz > r2) continue;
-                    mutable.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
+                    // Only consider blocks within radius of both villager and workstation
+                    int distToVillager2 = dx*dx + dy*dy + dz*dz;
+                    int wx = workstation.getX(), wy = workstation.getY(), wz = workstation.getZ();
+                    int vx = villagerPos.getX(), vy = villagerPos.getY(), vz = villagerPos.getZ();
+                    mutable.set(vx+dx, vy+dy, vz+dz);
+                    int distToWorkstation2 = (vx+dx-wx)*(vx+dx-wx) + (vy+dy-wy)*(vy+dy-wy) + (vz+dz-wz)*(vz+dz-wz);
+                    if (distToVillager2 > r2 || distToWorkstation2 > r2) continue;
                     BlockState state = world.getBlockState(mutable);
                     if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
                         // Find an adjacent air block to approach from
@@ -112,13 +161,12 @@ public class WoodcutterBrain {
                             }
                         }
                         if (approach == null) continue; // Not reachable
-                        double dist = center.getSquaredDistance(approach);
-                        int yDiff = Math.abs(center.getY() - approach.getY());
-                        // Prioritize by Y difference, then by distance
+                        double dist = villagerPos.getSquaredDistance(approach);
+                        int yDiff = Math.abs(villagerPos.getY() - approach.getY());
+                        // Prioritize by Y difference, then by distance to villager
                         if (yDiff < bestYDiff || (yDiff == bestYDiff && dist < bestDist)) {
                             bestDist = dist;
                             bestYDiff = yDiff;
-                            bestTarget = mutable.toImmutable();
                             bestApproach = approach;
                         }
                     }
