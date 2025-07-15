@@ -1,17 +1,7 @@
 package com.mcsettlers;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.util.Identifier;
-
 public class ModBlocks {
-	public static final Block AXE_WORKSTATION = new AxeWorkstationBlock(
-		Block.Settings.copy(Blocks.CRAFTING_TABLE)
-	);
-
+    
 	public static void registerBlocks() {
-		Registry.register(Registries.BLOCK, Identifier.of("mcsettlers:axe_workstation"), AXE_WORKSTATION);
 	}
 }

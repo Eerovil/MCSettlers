@@ -20,10 +20,9 @@
 		]
 	},
 	"mixins": [
-		"mcsettlers.mixins.json",
 		{
-			"config": "mcsettlers.client.mixins.json",
-			"environment": "client"
+			"config": "mcsettlers.mixins.json",
+			"environment": "server"
 		}
 	],
 	"depends": {
