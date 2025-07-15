@@ -30,6 +30,24 @@ public class WoodcutterBrain {
         return net.minecraft.item.ItemStack.EMPTY;
     }
 
+    // Raycast from villager to target block, return first log/leaf in the way (excluding target)
+    private static BlockPos getObstructingLogOrLeaf(VillagerEntity villager, ServerWorld world, BlockPos target) {
+        Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
+        Vec3d targetCenter = Vec3d.ofCenter(target);
+        Vec3d dir = targetCenter.subtract(eyePos).normalize();
+        double distance = eyePos.distanceTo(targetCenter);
+        for (double step = 0.5; step < distance; step += 0.5) {
+            Vec3d pos = eyePos.add(dir.multiply(step));
+            BlockPos blockPos = BlockPos.ofFloored(pos);
+            if (blockPos.equals(target)) continue; // skip the target itself
+            BlockState state = world.getBlockState(blockPos);
+            if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
+                return blockPos;
+            }
+        }
+        return null;
+    }
+
     public static void tick(VillagerEntity villager, ServerWorld world) {
         // Always show debug info for all related memory values at the start of every
         // tick
@@ -135,10 +153,15 @@ public class WoodcutterBrain {
         // If we have a block to break stored, do the breaking animation this tick
         // Smooth block breaking animation using a progress counter in memory
         if (breakBlock != null) {
+            BlockPos obstructing = getObstructingLogOrLeaf(villager, world, targetLog);
+            if (obstructing != null && !obstructing.equals(breakBlock)) {
+                // If the obstructing block is different, update the break target
+                targetLog = obstructing;
+                brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, obstructing);
+                breakBlock = obstructing;
+            }
             // Get or initialize breaking progress
             int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
-            System.out.println("[WoodcutterBrain] Villager " + villager.getUuidAsString() + " breaking block at "
-                    + breakBlock.toShortString() + " (progress: " + breakProgress + ")");
             // Axe holding logic
             net.minecraft.item.ItemStack axeStack = findAxeInInventory(villager);
             if (!axeStack.isEmpty()) {
@@ -260,9 +283,11 @@ public class WoodcutterBrain {
 
         // Check all coordinates for accessible logs (villager radius, then workstation
         // radius)
+        boolean anyLogs = false;
         for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
             BlockState state = world.getBlockState(pos);
             if (state.isIn(BlockTags.LOGS)) {
+                anyLogs = true;
                 BlockPos approach = checkTargetLogForAccess(world, pos);
                 if (approach != null) {
                     MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + pos.toShortString()
@@ -270,6 +295,13 @@ public class WoodcutterBrain {
                     return new BlockPos[] { pos, approach };
                 }
             }
+        }
+
+        // If no logs in range, just give up
+        if (!anyLogs) {
+            MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found in radius " + radius + " around "
+                    + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+            return null;
         }
 
         // Check all coordinates for leaves that are attached to a log
