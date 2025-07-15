@@ -17,6 +17,7 @@ public class VillagerEntityMixin {
     private static Collection<MemoryModuleType<?>> settlers$addCustomMemory(Collection<MemoryModuleType<?>> original) {
         HashSet<MemoryModuleType<?>> modules = new HashSet<>(original);
         modules.add(ModMemoryModules.TARGET_LOG);
+        modules.add(ModMemoryModules.TARGET_BREAK_BLOCK);
         System.out.println("[VillagerEntityMixin] Added TARGET_LOG to villager brain profile");
         return modules;
     }
