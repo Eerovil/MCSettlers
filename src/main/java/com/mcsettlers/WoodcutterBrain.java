@@ -16,75 +16,113 @@ public class WoodcutterBrain {
 
     public static void tick(VillagerEntity villager, ServerWorld world) {
         Brain<?> brain = villager.getBrain();
-
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
             .map(GlobalPos::pos)
             .orElse(null);
-        if (workstation == null) {
-            System.out.println("[WoodcutterBrain] No workstation found for villager " + villager.getUuid());
-            return;
-        }
-
+        if (workstation == null) return;
         Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_LOG);
         BlockPos targetLog = optionalTarget != null ? optionalTarget.orElse(null) : null;
-
-        // Log the current state of the TARGET_LOG memory
-        if (optionalTarget == null) {
-            System.out.println("[WoodcutterBrain] TARGET_LOG memory: not present for villager " + villager.getUuid());
-        } else if (targetLog == null) {
-            System.out.println("[WoodcutterBrain] TARGET_LOG memory: present but empty for villager " + villager.getUuid());
-        } else {
-            System.out.println("[WoodcutterBrain] TARGET_LOG memory: present and set to " + targetLog + " for villager " + villager.getUuid());
-        }
-
-        boolean needsNewTarget = targetLog == null || !world.getBlockState(targetLog).isIn(BlockTags.LOGS);
-        // Only search for new logs every 10 ticks
+        boolean needsNewTarget = targetLog == null ||
+            !(world.getBlockState(targetLog).isIn(BlockTags.LOGS) || world.getBlockState(targetLog).isIn(BlockTags.LEAVES));
+        // Only search for new logs or leaves every 10 ticks
         if (needsNewTarget) {
             if (tickCounter % 10 == 0) {
-                System.out.println("[WoodcutterBrain] Searching for new log for villager " + villager.getUuid());
-                targetLog = findNearbyLog(world, workstation, 10);
+                targetLog = findNearbyTarget(world, workstation, 10);
                 if (targetLog != null) {
-                    System.out.println("[WoodcutterBrain] Found log at " + targetLog + " for villager " + villager.getUuid());
                     brain.remember(ModMemoryModules.TARGET_LOG, targetLog);
                 } else {
-                    System.out.println("[WoodcutterBrain] No logs found near workstation for villager " + villager.getUuid());
                     brain.forget(ModMemoryModules.TARGET_LOG);
                     tickCounter++;
+                    showDebugInfo(villager, null);
                     return;
                 }
             } else {
                 tickCounter++;
+                showDebugInfo(villager, null);
                 return;
             }
         }
-
         tickCounter++;
-
         if (targetLog != null) {
-            if (villager.squaredDistanceTo(Vec3d.ofCenter(targetLog)) > 2) {
-                System.out.println("[WoodcutterBrain] Villager " + villager.getUuid() + " moving to log at " + targetLog);
+            double dist = villager.squaredDistanceTo(Vec3d.ofCenter(targetLog));
+            showDebugInfo(villager, targetLog);
+            if (dist > 7) {
+                // Walk to the air block next to the target, not the target itself
                 villager.getNavigation().startMovingTo(targetLog.getX(), targetLog.getY(), targetLog.getZ(), 1.0);
             } else {
-                System.out.println("[WoodcutterBrain] Villager " + villager.getUuid() + " chopping log at " + targetLog);
-                world.breakBlock(targetLog, true, villager);
-                brain.forget(ModMemoryModules.TARGET_LOG); // clear after chopping
+                // Find the actual block to break (the log/leaf adjacent to this air block)
+                BlockPos blockToBreak = null;
+                for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {
+                    BlockPos adj = targetLog.offset(dir);
+                    BlockState state = world.getBlockState(adj);
+                    if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
+                        blockToBreak = adj;
+                        break;
+                    }
+                }
+                if (blockToBreak != null) {
+                    world.breakBlock(blockToBreak, true, villager);
+                }
+                brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
+                showDebugInfo(villager, null);
             }
+        } else {
+            showDebugInfo(villager, null);
         }
     }
 
-    private static BlockPos findNearbyLog(ServerWorld world, BlockPos center, int radius) {
+    private static void showDebugInfo(VillagerEntity villager, BlockPos target) {
+        if (target != null) {
+            double dist = villager.squaredDistanceTo(Vec3d.ofCenter(target));
+            villager.setCustomName(
+                net.minecraft.text.Text.of("Target: " + target.getX() + "," + target.getY() + "," + target.getZ() + " | Dist: " + String.format("%.2f", dist))
+            );
+            villager.setCustomNameVisible(true);
+        } else {
+            villager.setCustomName(null);
+            villager.setCustomNameVisible(false);
+        }
+    }
+
+    private static BlockPos findNearbyTarget(ServerWorld world, BlockPos center, int radius) {
+        BlockPos bestTarget = null;
+        BlockPos bestApproach = null;
+        double bestDist = Double.MAX_VALUE;
+        int bestYDiff = Integer.MAX_VALUE;
         BlockPos.Mutable mutable = new BlockPos.Mutable();
+        int r2 = radius * radius;
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = -2; dy <= 2; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx*dx + dy*dy + dz*dz > r2) continue;
                     mutable.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
                     BlockState state = world.getBlockState(mutable);
-                    if (state.isIn(BlockTags.LOGS)) {
-                        return mutable.toImmutable();
+                    if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
+                        // Find an adjacent air block to approach from
+                        BlockPos approach = null;
+                        for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {
+                            BlockPos adj = mutable.offset(dir);
+                            BlockState adjState = world.getBlockState(adj);
+                            if (adjState.isAir()) {
+                                approach = adj;
+                                break;
+                            }
+                        }
+                        if (approach == null) continue; // Not reachable
+                        double dist = center.getSquaredDistance(approach);
+                        int yDiff = Math.abs(center.getY() - approach.getY());
+                        // Prioritize by Y difference, then by distance
+                        if (yDiff < bestYDiff || (yDiff == bestYDiff && dist < bestDist)) {
+                            bestDist = dist;
+                            bestYDiff = yDiff;
+                            bestTarget = mutable.toImmutable();
+                            bestApproach = approach;
+                        }
                     }
                 }
             }
         }
-        return null;
+        // Return the approach block if found, otherwise null
+        return bestApproach;
     }
 }
