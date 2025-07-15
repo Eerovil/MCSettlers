@@ -99,11 +99,19 @@ public class WoodcutterBrain {
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
+            long now = world.getTime();
+            Optional<Long> noWorkUntil = brain.getOptionalMemory(ModMemoryModules.NO_WORK_UNTIL_TICK);
+            if (noWorkUntil.isEmpty()) {
+                brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 200); // 10 seconds
+            } else if (now >= noWorkUntil.get()) {
+                brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
+                setJobStatus(brain, villager, "idle");
+            }
         }
 
         long tickEnd = System.nanoTime();
         if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
-            MCSettlers.LOGGER.info("[WoodcutterBrain] TOTAL tick took " + ((tickEnd - tickStart) / 1000) + "us");
+            MCSettlers.LOGGER.info("[WoodcutterBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
         }
     }
 
@@ -251,7 +259,7 @@ public class WoodcutterBrain {
         int r2 = radius * radius;
         HashMap<BlockPos, Boolean> handledCoords = new HashMap<>();
         // Get a list of all possible coordinates.
-        Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, radius, pos -> {
+        Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, 7, pos -> {
             BlockState state = world.getBlockState(pos);
             handledCoords.put(pos, true);
             if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
@@ -261,21 +269,11 @@ public class WoodcutterBrain {
             }
             return false;
         });
-        Iterable<BlockPos> workstationRadiusCoords = RadiusGenerator.radiusCoordinates(workstation, radius, pos -> {
-            if (handledCoords.containsKey(pos)) {
-                return false; // Skip already handled positions
-            }
-            BlockState state = world.getBlockState(pos);
-            if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
-                return true;
-            }
-            return false;
-        });
 
         // Check all coordinates for accessible logs (villager radius, then workstation
         // radius)
         boolean anyLogs = false;
-        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+        for (BlockPos pos : villagerRadiusCoords) {
             BlockState state = world.getBlockState(pos);
             if (state.isIn(BlockTags.LOGS)) {
                 anyLogs = true;
@@ -296,7 +294,7 @@ public class WoodcutterBrain {
         }
 
         // Check all coordinates for leaves that are attached to a log
-        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+        for (BlockPos pos : villagerRadiusCoords) {
             BlockState state = world.getBlockState(pos);
             if (state.isIn(BlockTags.LEAVES)) {
                 // Check if the leaf block is attached to a log
@@ -322,7 +320,7 @@ public class WoodcutterBrain {
         }
 
         // Find any leaf
-        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+        for (BlockPos pos : villagerRadiusCoords) {
             BlockState state = world.getBlockState(pos);
             if (state.isIn(BlockTags.LEAVES)) {
                 BlockPos approach = checkTargetLogForAccess(world, pos);
@@ -339,27 +337,5 @@ public class WoodcutterBrain {
                 + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
         return null;
 
-    }
-
-    // Utility to concatenate two iterables
-    private static <T> Iterable<T> concat(final Iterable<T> first, final Iterable<T> second) {
-        return () -> new java.util.Iterator<T>() {
-            java.util.Iterator<T> current = first.iterator();
-            java.util.Iterator<T> next = second.iterator();
-
-            @Override
-            public boolean hasNext() {
-                return current.hasNext() || next.hasNext();
-            }
-
-            @Override
-            public T next() {
-                if (current.hasNext()) {
-                    return current.next();
-                } else {
-                    return next.next();
-                }
-            }
-        };
     }
 }

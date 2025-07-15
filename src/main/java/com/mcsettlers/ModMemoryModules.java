@@ -18,6 +18,9 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Integer> BREAK_PROGRESS =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<Long> NO_WORK_UNTIL_TICK =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -28,5 +31,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "break_progress"),
             BREAK_PROGRESS);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "no_work_until_tick"),
+            NO_WORK_UNTIL_TICK);
     }
 }

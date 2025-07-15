@@ -19,6 +19,7 @@ public class VillagerEntityMixin {
         modules.add(ModMemoryModules.JOB_STATUS);
         modules.add(ModMemoryModules.TARGET_BREAK_BLOCK);
         modules.add(ModMemoryModules.BREAK_PROGRESS);
+        modules.add(ModMemoryModules.NO_WORK_UNTIL_TICK);
         System.out.println("[VillagerEntityMixin] Added TARGET_LOG to villager brain profile");
         return modules;
     }
