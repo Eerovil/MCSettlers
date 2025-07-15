@@ -16,7 +16,7 @@ public class VillagerEntityMixin {
     @ModifyArg(method = "createBrainProfile", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/ai/brain/Brain;createProfile(Ljava/util/Collection;Ljava/util/Collection;)Lnet/minecraft/entity/ai/brain/Brain$Profile;"), index = 0)
     private static Collection<MemoryModuleType<?>> settlers$addCustomMemory(Collection<MemoryModuleType<?>> original) {
         HashSet<MemoryModuleType<?>> modules = new HashSet<>(original);
-        modules.add(ModMemoryModules.TARGET_LOG);
+        modules.add(ModMemoryModules.JOB_STATUS);
         modules.add(ModMemoryModules.TARGET_BREAK_BLOCK);
         modules.add(ModMemoryModules.BREAK_PROGRESS);
         System.out.println("[VillagerEntityMixin] Added TARGET_LOG to villager brain profile");

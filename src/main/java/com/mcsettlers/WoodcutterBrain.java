@@ -17,8 +17,6 @@ import java.util.Optional;
 import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain {
-    private static int tickCounter = 0;
-
     // Find an axe in the villager's inventory
     private static net.minecraft.item.ItemStack findAxeInInventory(VillagerEntity villager) {
         for (int i = 0; i < villager.getInventory().size(); i++) {
@@ -30,7 +28,8 @@ public class WoodcutterBrain {
         return net.minecraft.item.ItemStack.EMPTY;
     }
 
-    // Raycast from villager to target block, return first log/leaf in the way (excluding target)
+    // Raycast from villager to target block, return first log/leaf in the way
+    // (excluding target)
     private static BlockPos getObstructingLogOrLeaf(VillagerEntity villager, ServerWorld world, BlockPos target) {
         Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
         Vec3d targetCenter = Vec3d.ofCenter(target);
@@ -39,7 +38,8 @@ public class WoodcutterBrain {
         for (double step = 0.5; step < distance; step += 0.5) {
             Vec3d pos = eyePos.add(dir.multiply(step));
             BlockPos blockPos = BlockPos.ofFloored(pos);
-            if (blockPos.equals(target)) continue; // skip the target itself
+            if (blockPos.equals(target))
+                continue; // skip the target itself
             BlockState state = world.getBlockState(blockPos);
             if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
                 return blockPos;
@@ -48,18 +48,32 @@ public class WoodcutterBrain {
         return null;
     }
 
+    private static void setJobStatus(Brain<?> brain, VillagerEntity villager, String status) {
+        brain.remember(ModMemoryModules.JOB_STATUS, status);
+        villager.setCustomName(net.minecraft.text.Text.of(status));
+        villager.setCustomNameVisible(true);
+        MCSettlers.LOGGER.info("[WoodcutterBrain] Set job status to " + status + " for villager "
+                + villager.getUuidAsString());
+    }
+
     public static void tick(VillagerEntity villager, ServerWorld world) {
-        // Always show debug info for all related memory values at the start of every
-        // tick
-        tickCounter++;
+        long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
+        String jobStatus = brain.getOptionalMemory(ModMemoryModules.JOB_STATUS)
+                .orElse("unknown");
+        
+        if (jobStatus == null || jobStatus.isEmpty() || jobStatus.equals("unknown")) {
+            // If job status is unknown, set it to idle
+            setJobStatus(brain, villager, "idle");
+            jobStatus = "idle"; // Update local variable to avoid repeated lookups
+        }
+
+        // Read memory values
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
                 .map(GlobalPos::pos)
                 .orElse(null);
-        Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_LOG);
+        Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
         BlockPos targetLog = optionalTarget != null ? optionalTarget.orElse(null) : null;
-        Optional<BlockPos> optionalBreakBlock = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
-        BlockPos breakBlock = optionalBreakBlock != null ? optionalBreakBlock.orElse(null) : null;
         Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
         BlockPos walkTarget = null;
         if (optionalWalkTarget.isPresent()) {
@@ -68,158 +82,135 @@ public class WoodcutterBrain {
                 walkTarget = wt.getLookTarget().getBlockPos();
             }
         }
-        showDebugInfoAll(villager, targetLog, breakBlock, walkTarget);
-        // Highlight walkTarget and targetLog blocks for debugging
-        if (walkTarget != null) {
-            // Use a unique entity ID offset for walkTarget highlight
-            world.setBlockBreakingInfo(villager.getId() + 1000, walkTarget, 1);
-        } else {
-            // Clear highlight if not present
-            world.setBlockBreakingInfo(villager.getId() + 1000, BlockPos.ORIGIN, -1);
-        }
-        if (targetLog != null) {
-            // Use a unique entity ID offset for targetLog highlight
-            world.setBlockBreakingInfo(villager.getId() + 2000, targetLog, 2);
-        } else {
-            // Clear highlight if not present
-            world.setBlockBreakingInfo(villager.getId() + 2000, BlockPos.ORIGIN, -1);
-        }
 
         if (workstation == null)
             return;
-        if (targetLog != null) {
-            if (!world.getBlockState(targetLog).isIn(BlockTags.LOGS) &&
-                    !world.getBlockState(targetLog).isIn(BlockTags.LEAVES)) {
-                // If the target log is not a log or leaf, we need to find a new
-                targetLog = null;
-                brain.forget(ModMemoryModules.TARGET_LOG);
+
+        if (jobStatus == "walking") {
+            if (walkTarget != null) {
+                return; // Already walking, nothing to do
             }
+            startBreakingBlock(villager, world, workstation, targetLog, brain);
+        } else if (jobStatus == "breaking") {
+            keepBreakingBlock(villager, world, targetLog, brain);
+        } else if (jobStatus == "idle") {
+            // If idle, we can search for logs
+            findNewTarget(villager, world, workstation, brain);
+        } else if (jobStatus == "no_work") {
+            // Set timer for 10 seconds and make the villager idle
+            // This is a placeholder; actual implementation would depend on game logic
         }
-        boolean needsNewTarget = (targetLog == null && walkTarget == null);
-        // Only search for new logs or leaves every 10 ticks
-        if (needsNewTarget) {
-            if (tickCounter % 20 == 0) {
-                int searchRadius = 10;
-                BlockPos villagerPos = villager.getBlockPos();
-                BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius);
-                BlockPos foundLog = found != null ? found[0] : null;
-                BlockPos foundApproach = found != null ? found[1] : null;
-                if (foundLog != null) {
-                    MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + foundLog.toShortString()
-                            + ", approach at " + foundApproach.toShortString());
-                    brain.remember(ModMemoryModules.TARGET_LOG, foundLog);
-                    // Ensure approach is walkable (not inside block, on ground)
-                    BlockPos walkableApproach = foundApproach;
-                    while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down())
-                            && walkableApproach.getY() > 0) {
-                        walkableApproach = walkableApproach.down();
-                    }
-                    walkTarget = walkableApproach;
-                    targetLog = foundLog; // Update targetLog to the found log
-                    // Set walk target with reasonable completion range and duration
-                    brain.remember(MemoryModuleType.WALK_TARGET,
-                            new net.minecraft.entity.ai.brain.WalkTarget(
-                                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(walkableApproach),
-                                    0.6F,
-                                    1 // completion range
-                            ));
-                } else {
-                    brain.forget(ModMemoryModules.TARGET_LOG);
-                    // Walk to workstation if no log found
-                    brain.remember(MemoryModuleType.WALK_TARGET,
-                            new net.minecraft.entity.ai.brain.WalkTarget(
-                                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(workstation),
-                                    0.6F,
-                                    1));
-                    return;
-                }
-            } else {
-                return;
+
+        long tickEnd = System.nanoTime();
+        if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
+            MCSettlers.LOGGER.info("[WoodcutterBrain] TOTAL tick took " + ((tickEnd - tickStart) / 1000) + "us");
+        }
+    }
+
+    private static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
+            Brain<?> brain) {
+        int searchRadius = 10;
+        BlockPos villagerPos = villager.getBlockPos();
+        BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius);
+        BlockPos foundLog = found != null ? found[0] : null;
+        BlockPos foundApproach = found != null ? found[1] : null;
+        if (foundLog != null) {
+            MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + foundLog.toShortString()
+                    + ", approach at " + foundApproach.toShortString());
+            brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, foundLog);
+            // Ensure approach is walkable (not inside block, on ground)
+            BlockPos walkableApproach = foundApproach;
+            while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down())
+                    && walkableApproach.getY() > 0) {
+                walkableApproach = walkableApproach.down();
             }
+            // Set walk target with reasonable completion range and duration
+            brain.remember(MemoryModuleType.WALK_TARGET,
+                    new net.minecraft.entity.ai.brain.WalkTarget(
+                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(walkableApproach),
+                            0.6F,
+                            1 // completion range
+                    ));
+
+            setJobStatus(brain, villager, "walking");
+        } else {
+            setJobStatus(brain, villager, "no_work");
         }
-        // Always show debug info for all related memory values
-        showDebugInfoAll(villager, targetLog, breakBlock, walkTarget);
+    }
+
+    private static void startBreakingBlock(
+            VillagerEntity villager, ServerWorld world, BlockPos workstation,
+            BlockPos targetLog, Brain<?> brain) {
+
+        // Start breaking logic?
         if (targetLog != null) {
             double distSq = villager.squaredDistanceTo(Vec3d.ofCenter(targetLog));
             double dist = Math.sqrt(distSq);
             // Only break if close enough to the log and not already set
-            if (dist <= 6 && breakBlock == null) {
-                brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, targetLog);
-                Vec3d blockCenter = Vec3d.ofCenter(targetLog);
-                villager.getLookControl().lookAt(blockCenter.x, blockCenter.y, blockCenter.z);
-            }
-        }
+            if (dist > 6) {
+                // Too far still...
+                System.out.println("[WoodcutterBrain] Villager " + villager.getUuidAsString()
+                        + " too far from target log at " + targetLog.toShortString() + " (distance: "
+                        + String.format("%.2f", dist) + ")");
 
-        // If we have a block to break stored, do the breaking animation this tick
-        // Smooth block breaking animation using a progress counter in memory
-        if (breakBlock != null) {
+                brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+                brain.forget(ModMemoryModules.BREAK_PROGRESS);
+                setJobStatus(brain, villager, "no_work");
+                return;
+            }
+            Vec3d blockCenter = Vec3d.ofCenter(targetLog);
+            villager.getLookControl().lookAt(blockCenter.x, blockCenter.y, blockCenter.z);
+
             BlockPos obstructing = getObstructingLogOrLeaf(villager, world, targetLog);
-            if (obstructing != null && !obstructing.equals(breakBlock)) {
+            if (obstructing != null && !obstructing.equals(targetLog)) {
                 // If the obstructing block is different, update the break target
                 targetLog = obstructing;
                 brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, obstructing);
-                breakBlock = obstructing;
+                targetLog = obstructing;
             }
             // Get or initialize breaking progress
-            int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
             // Axe holding logic
             net.minecraft.item.ItemStack axeStack = findAxeInInventory(villager);
             if (!axeStack.isEmpty()) {
                 System.out.println("[WoodcutterBrain] Villager holding axe: " + axeStack);
                 villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, axeStack);
             }
-            Vec3d blockCenter = Vec3d.ofCenter(breakBlock);
-            villager.getLookControl().lookAt(blockCenter.x, blockCenter.y, blockCenter.z);
+
             // Animate breaking progress (0-10)
-            world.setBlockBreakingInfo(villager.getId(), breakBlock, breakProgress);
+            world.setBlockBreakingInfo(villager.getId(), targetLog, 0);
             villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            // Block wandering while breaking
-            if (breakProgress == 0) {
-                brain.forget(MemoryModuleType.WALK_TARGET);
-            }
-            if (breakProgress < 10) {
-                brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + 1);
-            } else {
-                System.out.println("[WoodcutterBrain] Actually breaking block at " + breakBlock.toShortString());
-                world.breakBlock(breakBlock, true, villager);
-                world.setBlockBreakingInfo(villager.getId(), breakBlock, -1); // clear animation
-                villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
-                brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
-                brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
-                brain.forget(ModMemoryModules.BREAK_PROGRESS);
-            }
-        } else if (targetLog != null && walkTarget == null) {
-            // No walking left, but block not in reach... We go back to workstation
-            System.out.println("[WoodcutterBrain] Villager " + villager.getUuidAsString()
-                    + " returning to workstation at " + workstation.toShortString());
-            brain.forget(ModMemoryModules.TARGET_LOG);
-            brain.remember(MemoryModuleType.WALK_TARGET,
-                    new net.minecraft.entity.ai.brain.WalkTarget(
-                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(workstation), 0.6F, 0));
+            // Remember the target block and start breaking
+
+            brain.remember(ModMemoryModules.BREAK_PROGRESS, 0);
+            setJobStatus(brain, villager, "breaking");
+        }
+    }
+
+    private static void keepBreakingBlock(
+            VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
+        // Continue breaking logic
+        int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
+        // Animate breaking progress (0-10)
+        world.setBlockBreakingInfo(villager.getId(), targetLog, breakProgress);
+
+        if (breakProgress < 10) {
+            brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + 1);
+        } else {
+            System.out.println("[WoodcutterBrain] Actually breaking block at " + targetLog.toShortString());
+            world.breakBlock(targetLog, true, villager);
+            world.setBlockBreakingInfo(villager.getId(), targetLog, -1); // clear animation
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+            brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+            brain.forget(ModMemoryModules.BREAK_PROGRESS);
+            setJobStatus(brain, villager, "idle");
         }
     }
 
     // Show debug info for all related memory values
-    private static void showDebugInfoAll(VillagerEntity villager, BlockPos targetLog, BlockPos breakBlock,
-            BlockPos walkTarget) {
+    private static void showDebugInfo(VillagerEntity villager, String status) {
         StringBuilder sb = new StringBuilder();
-        if (targetLog != null) {
-            double dist = Math.sqrt(villager.squaredDistanceTo(Vec3d.ofCenter(targetLog)));
-            sb.append("TargetLog: ").append(targetLog.getX()).append(",").append(targetLog.getY()).append(",")
-                    .append(targetLog.getZ())
-                    .append(" | Dist: ").append(String.format("%.2f", dist)).append("\n");
-        }
-        if (breakBlock != null) {
-            double dist = Math.sqrt(villager.squaredDistanceTo(Vec3d.ofCenter(breakBlock)));
-            sb.append("BreakBlock: ").append(breakBlock.getX()).append(",").append(breakBlock.getY()).append(",")
-                    .append(breakBlock.getZ())
-                    .append(" | Dist: ").append(String.format("%.2f", dist)).append("\n");
-        }
-        if (walkTarget != null) {
-            double dist = Math.sqrt(villager.squaredDistanceTo(Vec3d.ofCenter(walkTarget)));
-            sb.append("WalkTarget: ").append(walkTarget.getX()).append(",").append(walkTarget.getY()).append(",")
-                    .append(walkTarget.getZ())
-                    .append(" | Dist: ").append(String.format("%.2f", dist)).append("\n");
+        if (status != null) {
+            sb.append(status);
         }
         if (sb.length() > 0) {
             villager.setCustomName(net.minecraft.text.Text.of(sb.toString()));

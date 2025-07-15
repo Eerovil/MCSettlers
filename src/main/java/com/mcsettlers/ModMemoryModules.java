@@ -9,7 +9,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 public class ModMemoryModules {
-    public static final MemoryModuleType<BlockPos> TARGET_LOG =
+    public static final MemoryModuleType<String> JOB_STATUS =
         new MemoryModuleType<>(Optional.empty()); // no codec needed
 
     public static final MemoryModuleType<BlockPos> TARGET_BREAK_BLOCK =
@@ -20,8 +20,8 @@ public class ModMemoryModules {
 
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
-            Identifier.of("mcsettlers", "target_log"),
-            TARGET_LOG);
+            Identifier.of("mcsettlers", "job_status"),
+            JOB_STATUS);
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "target_break_block"),
             TARGET_BREAK_BLOCK);
