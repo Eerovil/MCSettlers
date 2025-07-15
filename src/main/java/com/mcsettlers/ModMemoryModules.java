@@ -15,6 +15,9 @@ public class ModMemoryModules {
     public static final MemoryModuleType<BlockPos> TARGET_BREAK_BLOCK =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<Integer> BREAK_PROGRESS =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "target_log"),
@@ -22,5 +25,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "target_break_block"),
             TARGET_BREAK_BLOCK);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "break_progress"),
+            BREAK_PROGRESS);
     }
 }

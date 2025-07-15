@@ -18,6 +18,7 @@ public class VillagerEntityMixin {
         HashSet<MemoryModuleType<?>> modules = new HashSet<>(original);
         modules.add(ModMemoryModules.TARGET_LOG);
         modules.add(ModMemoryModules.TARGET_BREAK_BLOCK);
+        modules.add(ModMemoryModules.BREAK_PROGRESS);
         System.out.println("[VillagerEntityMixin] Added TARGET_LOG to villager brain profile");
         return modules;
     }

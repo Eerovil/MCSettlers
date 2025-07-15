@@ -6,12 +6,12 @@ import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.HashMap;
 import java.util.Optional;
 
 import com.mcsettlers.utils.RadiusGenerator;
@@ -33,7 +33,6 @@ public class WoodcutterBrain {
     public static void tick(VillagerEntity villager, ServerWorld world) {
         // Always show debug info for all related memory values at the start of every
         // tick
-
         tickCounter++;
         Brain<?> brain = villager.getBrain();
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
@@ -52,14 +51,27 @@ public class WoodcutterBrain {
             }
         }
         showDebugInfoAll(villager, targetLog, breakBlock, walkTarget);
-        if (tickCounter % 20 != 0) {
-            return;
+        // Highlight walkTarget and targetLog blocks for debugging
+        if (walkTarget != null) {
+            // Use a unique entity ID offset for walkTarget highlight
+            world.setBlockBreakingInfo(villager.getId() + 1000, walkTarget, 1);
+        } else {
+            // Clear highlight if not present
+            world.setBlockBreakingInfo(villager.getId() + 1000, BlockPos.ORIGIN, -1);
         }
+        if (targetLog != null) {
+            // Use a unique entity ID offset for targetLog highlight
+            world.setBlockBreakingInfo(villager.getId() + 2000, targetLog, 2);
+        } else {
+            // Clear highlight if not present
+            world.setBlockBreakingInfo(villager.getId() + 2000, BlockPos.ORIGIN, -1);
+        }
+
         if (workstation == null)
             return;
         if (targetLog != null) {
             if (!world.getBlockState(targetLog).isIn(BlockTags.LOGS) &&
-                !world.getBlockState(targetLog).isIn(BlockTags.LEAVES)) {
+                    !world.getBlockState(targetLog).isIn(BlockTags.LEAVES)) {
                 // If the target log is not a log or leaf, we need to find a new
                 targetLog = null;
                 brain.forget(ModMemoryModules.TARGET_LOG);
@@ -69,11 +81,6 @@ public class WoodcutterBrain {
         // Only search for new logs or leaves every 10 ticks
         if (needsNewTarget) {
             if (tickCounter % 20 == 0) {
-                MCSettlers.LOGGER.info("[WoodcutterBrain] Villager " + villager.getUuidAsString()
-                        + " needs new target log or leaf, searching...");
-
-                MCSettlers.LOGGER.info("[WoodcutterBrain] targetLog: " + targetLog);
-                MCSettlers.LOGGER.info("[WoodcutterBrain] walkTarget: " + walkTarget);
                 int searchRadius = 10;
                 BlockPos villagerPos = villager.getBlockPos();
                 BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius);
@@ -85,7 +92,8 @@ public class WoodcutterBrain {
                     brain.remember(ModMemoryModules.TARGET_LOG, foundLog);
                     // Ensure approach is walkable (not inside block, on ground)
                     BlockPos walkableApproach = foundApproach;
-                    while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down()) && walkableApproach.getY() > 0) {
+                    while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down())
+                            && walkableApproach.getY() > 0) {
                         walkableApproach = walkableApproach.down();
                     }
                     walkTarget = walkableApproach;
@@ -96,19 +104,15 @@ public class WoodcutterBrain {
                                     new net.minecraft.entity.ai.brain.BlockPosLookTarget(walkableApproach),
                                     0.6F,
                                     1 // completion range
-                            )
-                    );
+                            ));
                 } else {
-                    MCSettlers.LOGGER.info("[WoodcutterBrain] No log found, clearing target.");
                     brain.forget(ModMemoryModules.TARGET_LOG);
                     // Walk to workstation if no log found
                     brain.remember(MemoryModuleType.WALK_TARGET,
                             new net.minecraft.entity.ai.brain.WalkTarget(
                                     new net.minecraft.entity.ai.brain.BlockPosLookTarget(workstation),
                                     0.6F,
-                                    1
-                            )
-                    );
+                                    1));
                     return;
                 }
             } else {
@@ -129,9 +133,12 @@ public class WoodcutterBrain {
         }
 
         // If we have a block to break stored, do the breaking animation this tick
+        // Smooth block breaking animation using a progress counter in memory
         if (breakBlock != null) {
+            // Get or initialize breaking progress
+            int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
             System.out.println("[WoodcutterBrain] Villager " + villager.getUuidAsString() + " breaking block at "
-                    + breakBlock.toShortString());
+                    + breakBlock.toShortString() + " (progress: " + breakProgress + ")");
             // Axe holding logic
             net.minecraft.item.ItemStack axeStack = findAxeInInventory(villager);
             if (!axeStack.isEmpty()) {
@@ -140,24 +147,23 @@ public class WoodcutterBrain {
             }
             Vec3d blockCenter = Vec3d.ofCenter(breakBlock);
             villager.getLookControl().lookAt(blockCenter.x, blockCenter.y, blockCenter.z);
-            // Breaking animation logic
-            for (int progress = 0; progress <= 10; progress++) {
-                world.setBlockBreakingInfo(villager.getId(), breakBlock, progress);
-                villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-                try {
-                    Thread.sleep(80);
-                } catch (InterruptedException ignored) {
-                }
-            }
-            System.out.println("[WoodcutterBrain] Actually breaking block at " + breakBlock.toShortString());
-            world.breakBlock(breakBlock, true, villager);
-            world.setBlockBreakingInfo(villager.getId(), breakBlock, -1); // clear animation
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
-            brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
-            brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
-            // Only clear walk target if villager is close enough to the block
-            if (villager.squaredDistanceTo(Vec3d.ofCenter(breakBlock)) <= 4) {
+            // Animate breaking progress (0-10)
+            world.setBlockBreakingInfo(villager.getId(), breakBlock, breakProgress);
+            villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            // Block wandering while breaking
+            if (breakProgress == 0) {
                 brain.forget(MemoryModuleType.WALK_TARGET);
+            }
+            if (breakProgress < 10) {
+                brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + 1);
+            } else {
+                System.out.println("[WoodcutterBrain] Actually breaking block at " + breakBlock.toShortString());
+                world.breakBlock(breakBlock, true, villager);
+                world.setBlockBreakingInfo(villager.getId(), breakBlock, -1); // clear animation
+                villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+                brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+                brain.forget(ModMemoryModules.TARGET_LOG); // clear after breaking
+                brain.forget(ModMemoryModules.BREAK_PROGRESS);
             }
         } else if (targetLog != null && walkTarget == null) {
             // No walking left, but block not in reach... We go back to workstation
@@ -165,8 +171,8 @@ public class WoodcutterBrain {
                     + " returning to workstation at " + workstation.toShortString());
             brain.forget(ModMemoryModules.TARGET_LOG);
             brain.remember(MemoryModuleType.WALK_TARGET,
-            new net.minecraft.entity.ai.brain.WalkTarget(
-                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(workstation), 0.6F, 0));
+                    new net.minecraft.entity.ai.brain.WalkTarget(
+                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(workstation), 0.6F, 0));
         }
     }
 
@@ -227,68 +233,110 @@ public class WoodcutterBrain {
             ServerWorld world,
             BlockPos villagerPos,
             BlockPos workstation,
-            int radius
-        ) {
-            // First try to find a log, then a leaf
-        BlockPos[] result = findNearbyLogAndApproach(world, villagerPos, workstation, radius, BlockTags.LOGS);
-        MCSettlers.LOGGER.info("[WoodcutterBrain] Searching for logs around villager at " + villagerPos.toShortString());
-        if (result != null) {
-            return result;
+            int radius) {
+        int r2 = radius * radius;
+        HashMap<BlockPos, Boolean> handledCoords = new HashMap<>();
+        // Get a list of all possible coordinates.
+        Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, radius, pos -> {
+            BlockState state = world.getBlockState(pos);
+            handledCoords.put(pos, true);
+            if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
+                if (workstation.getSquaredDistance(pos) <= r2) {
+                    return true; // Only consider positions within the radius
+                }
+            }
+            return false;
+        });
+        Iterable<BlockPos> workstationRadiusCoords = RadiusGenerator.radiusCoordinates(workstation, radius, pos -> {
+            if (handledCoords.containsKey(pos)) {
+                return false; // Skip already handled positions
+            }
+            BlockState state = world.getBlockState(pos);
+            if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
+                return true;
+            }
+            return false;
+        });
+
+        // Check all coordinates for accessible logs (villager radius, then workstation
+        // radius)
+        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+            BlockState state = world.getBlockState(pos);
+            if (state.isIn(BlockTags.LOGS)) {
+                BlockPos approach = checkTargetLogForAccess(world, pos);
+                if (approach != null) {
+                    MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + pos.toShortString()
+                            + ", approach at " + approach.toShortString());
+                    return new BlockPos[] { pos, approach };
+                }
+            }
         }
-        // If no log found, try leaves
-        return findNearbyLogAndApproach(world, villagerPos, workstation, radius, BlockTags.LEAVES);
+
+        // Check all coordinates for leaves that are attached to a log
+        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+            BlockState state = world.getBlockState(pos);
+            if (state.isIn(BlockTags.LEAVES)) {
+                // Check if the leaf block is attached to a log
+                boolean hasLogNeighbor = false;
+                for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {
+                    BlockPos neighborPos = pos.offset(dir);
+                    BlockState neighborState = world.getBlockState(neighborPos);
+                    if (neighborState.isIn(BlockTags.LOGS)) {
+                        hasLogNeighbor = true;
+                        break; // Found a log neighbor, no need to check further
+                    }
+                }
+                if (!hasLogNeighbor) {
+                    continue; // Skip leaves not attached to a log
+                }
+                BlockPos approach = checkTargetLogForAccess(world, pos);
+                if (approach != null) {
+                    MCSettlers.LOGGER.info("[WoodcutterBrain] Found attached leaf at " + pos.toShortString()
+                            + ", approach at " + approach.toShortString());
+                    return new BlockPos[] { pos, approach };
+                }
+            }
+        }
+
+        // Find any leaf
+        for (BlockPos pos : concat(villagerRadiusCoords, workstationRadiusCoords)) {
+            BlockState state = world.getBlockState(pos);
+            if (state.isIn(BlockTags.LEAVES)) {
+                BlockPos approach = checkTargetLogForAccess(world, pos);
+                if (approach != null) {
+                    MCSettlers.LOGGER.info("[WoodcutterBrain] Found leaf at " + pos.toShortString()
+                            + ", approach at " + approach.toShortString());
+                    return new BlockPos[] { pos, approach };
+                }
+            }
+        }
+
+        // If no logs or leaves found, return null
+        MCSettlers.LOGGER.info("[WoodcutterBrain] No logs or leaves found in radius " + radius + " around "
+                + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+        return null;
+
     }
 
-    // Find the nearest log/leaf and its approach air block
-    private static BlockPos[] findNearbyLogAndApproach(
-            ServerWorld world,
-            BlockPos villagerPos,
-            BlockPos workstation,
-            int radius,
-            TagKey<net.minecraft.block.Block> targetBlockState
-        ) {
-        BlockPos bestLog = null;
-        BlockPos bestApproach = null;
-        int r2 = radius * radius;
+    // Utility to concatenate two iterables
+    private static <T> Iterable<T> concat(final Iterable<T> first, final Iterable<T> second) {
+        return () -> new java.util.Iterator<T>() {
+            java.util.Iterator<T> current = first.iterator();
+            java.util.Iterator<T> next = second.iterator();
 
-        Iterable<BlockPos> radiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, radius);
-        for (BlockPos pos : radiusCoords) {
-            BlockState state = world.getBlockState(pos);
-            if (!state.isIn(targetBlockState)) {
-                continue; // Skip if not in the target block state
+            @Override
+            public boolean hasNext() {
+                return current.hasNext() || next.hasNext();
             }
-            if (workstation.getSquaredDistance(pos) <= r2) {
-                // This is a good position!
-                bestApproach = checkTargetLogForAccess(world, pos);
-                if (bestApproach != null) {
-                    bestLog = pos;
-                    break;
+
+            @Override
+            public T next() {
+                if (current.hasNext()) {
+                    return current.next();
+                } else {
+                    return next.next();
                 }
             }
-        }
-
-        // If not found, search around the workstation
-        if (bestLog == null) {
-            for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, radius)) {
-                BlockState state = world.getBlockState(pos);
-                if (!state.isIn(targetBlockState)) {
-                    continue; // Skip if not in the target block state
-                }
-                bestApproach = checkTargetLogForAccess(world, pos);
-                if (bestApproach != null) {
-                    bestLog = pos;
-                    break;
-                }
-            }
-        }
-
-        // Move bestApproach down until it finds a solid block
-        if (bestLog != null && bestApproach != null) {
-            while (bestApproach.getY() > 0 && world.getBlockState(bestApproach.down()).isAir()) {
-                bestApproach = bestApproach.down();
-            }
-        }
-
-        return (bestLog != null && bestApproach != null) ? new BlockPos[] { bestLog, bestApproach } : null;
+        };
     }
 }
