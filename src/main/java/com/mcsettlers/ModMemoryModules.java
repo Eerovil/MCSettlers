@@ -1,5 +1,6 @@
 package com.mcsettlers;
 
+import java.util.List;
 import java.util.Optional;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
@@ -21,6 +22,12 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Long> NO_WORK_UNTIL_TICK =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<List<BlockPos>> PILLAR_BLOCKS =
+        new MemoryModuleType<>(Optional.empty());
+
+    public static final MemoryModuleType<Boolean> KEEP_PILLARING =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -34,5 +41,11 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "no_work_until_tick"),
             NO_WORK_UNTIL_TICK);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "pillar_blocks"),
+            PILLAR_BLOCKS);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "keep_pillaring"),
+            KEEP_PILLARING);
     }
 }
