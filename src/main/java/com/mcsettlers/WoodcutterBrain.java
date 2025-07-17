@@ -1,16 +1,22 @@
 package com.mcsettlers;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.ChestBlock;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.event.GameEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -123,6 +129,8 @@ public class WoodcutterBrain {
             keepStoppingPillaring(villager, world, targetLog, brain);
         } else if (jobStatus == "picking_up_blocks") {
             keepPickingUpBlocks(villager, world, brain, workstation);
+        } else if (jobStatus == "deposit_items") {
+            keepDepositingItems(villager, world, brain, workstation);
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
@@ -132,7 +140,12 @@ public class WoodcutterBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                setJobStatus(brain, villager, "picking_up_blocks");
+                // If items in inventory, set job status to deposit items
+                if (!villager.getInventory().isEmpty()) {
+                    setJobStatus(brain, villager, "deposit_items");
+                } else {
+                    setJobStatus(brain, villager, "picking_up_blocks");
+                }
                 // If very far from workstation, walk to it
                 if (villager.getBlockPos().getSquaredDistance(workstation) > 30) {
                     brain.remember(MemoryModuleType.WALK_TARGET,
@@ -224,6 +237,117 @@ public class WoodcutterBrain {
         } else {
             setJobStatus(brain, villager, "no_work");
         }
+    }
+
+    private static Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation) {
+        int searchRadius = 10;
+        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
+                    BlockPos pos = workstation.add(dx, dy, dz);
+                    if (!world.isChunkLoaded(pos)) continue;
+                    BlockState state = world.getBlockState(pos);
+                    if (state.isOf(Blocks.CHEST)) {
+                        return Optional.of(pos);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean addStackToChest(
+            ChestBlockEntity chest, ItemStack stack) {
+                int emptySlot = -1;
+                for (int i = 0; i < chest.size(); i++) {
+                    ItemStack chestStack = chest.getStack(i);
+                    if (chestStack.isEmpty() && emptySlot == -1) {
+                        emptySlot = i;
+                        continue;
+                    }
+                    // Check if the item can be added to this slot
+                    if (chestStack.isOf(stack.getItem())) {
+                        int countToAdd = Math.min(stack.getCount(), chestStack.getMaxCount() - chestStack.getCount());
+                        if (countToAdd > 0) {
+                            chestStack.increment(countToAdd);
+                            stack.decrement(countToAdd);
+                        }
+                    }
+                    // If stack is empty, we can stop
+                    if (stack.isEmpty()) {
+                        return true;
+                    }
+                }
+                // Add to any empty slot in the chest
+                if (emptySlot != -1) {
+                    chest.setStack(emptySlot, stack);
+                    return true;
+                }
+                // No empty slot found
+                return false;
+            }
+
+    private static void keepDepositingItems(
+            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+
+        // If currently walking, return;
+        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
+        if (optionalWalkTarget.isPresent()) {
+            return;
+        }
+
+        // If no items to deposit, set job status to idle
+        if (villager.getInventory().isEmpty()) {
+            setJobStatus(brain, villager, "idle");
+            return;
+        }
+
+        // Find a chest to deposit items
+        Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+        if (chestPos.isEmpty()) {
+            chestPos = findDepositChest(world, workstation);
+            if (chestPos.isPresent()) {
+                brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
+            } else {
+                MCSettlers.LOGGER.info("[WoodcutterBrain] No nearby chest found for villager " + villager.getUuidAsString());
+                setJobStatus(brain, villager, "idle");
+                return;
+            }
+        }
+
+        BlockPos pos = chestPos.get();
+
+        // If close to chest, deposit items
+        if (villager.squaredDistanceTo(Vec3d.ofCenter(pos)) < 2.0) {
+            BlockEntity chest = world.getBlockEntity(pos);
+            if (chest instanceof net.minecraft.block.entity.ChestBlockEntity chestEntity) {
+                world.emitGameEvent(null, GameEvent.CONTAINER_OPEN, pos);
+                for (int i = 0; i < villager.getInventory().size(); i++) {
+                    net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
+                    if (stack.isEmpty()) continue;
+
+                    // Try to add the stack to the chest
+                    if (addStackToChest(chestEntity, stack)) {
+                        // Successfully added the stack
+                        villager.getInventory().removeStack(i);
+                        continue;
+                    }
+
+                }
+            }
+
+            setJobStatus(brain, villager, "idle");
+            return;
+        }
+
+        brain.remember(MemoryModuleType.WALK_TARGET,
+                new net.minecraft.entity.ai.brain.WalkTarget(
+                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos),
+                        0.6F,
+                        1
+                ));
+        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} walking to deposit items at {}", villager.getUuidAsString(), pos);
+
     }
 
     private static void startBreakingBlock(

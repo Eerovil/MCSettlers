@@ -28,6 +28,9 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Boolean> KEEP_PILLARING =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<BlockPos> DEPOSIT_CHEST =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -47,5 +50,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "keep_pillaring"),
             KEEP_PILLARING);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "deposit_chest"),
+            DEPOSIT_CHEST);
     }
 }
