@@ -2,18 +2,11 @@
 package com.mcsettlers.mixin;
 
 import com.mcsettlers.ModMemoryModules;
-
 import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.village.VillagerData;
-import net.minecraft.village.VillagerProfession;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -31,19 +24,5 @@ public class VillagerEntityMixin {
         modules.add(ModMemoryModules.KEEP_PILLARING);
         System.out.println("[VillagerEntityMixin] Added TARGET_LOG to villager brain profile");
         return modules;
-    }
-
-    @Inject(method = "setVillagerData", at = @At("HEAD"), cancellable = true)
-    private void onSetVillagerData(VillagerData data, CallbackInfo ci) {
-        if (data.profession() == VillagerProfession.FLETCHER) {
-            int rawId = Registries.VILLAGER_PROFESSION.getRawId(data.profession().value());
-            RegistryEntry<VillagerProfession> profession = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
-            ((VillagerEntity)(Object)this).setVillagerData(new VillagerData(
-                data.type(),
-                profession,
-                data.level()
-            ));
-            ci.cancel();
-        }
     }
 }
