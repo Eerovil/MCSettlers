@@ -20,7 +20,7 @@ public class RadiusGenerator {
                     for (int dy = -r; dy <= r; dy++) {
                         for (int dz = -r; dz <= r; dz++) {
                             BlockPos pos = center.add(dx, dy, dz);
-                            if (center.getSquaredDistance(pos) <= r * r && filter.test(pos)) {
+                            if (filter.test(pos)) {
                                 queue.add(pos);
                                 seen.add(pos);
                             }

@@ -11,6 +11,7 @@ import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -180,8 +181,16 @@ public class WoodcutterBrain {
         
         MCSettlers.LOGGER.info("[WoodcutterBrain] Villager is dancing!");
         // look in a random direction
-        villager.setHeadYaw((float) (Math.random() * 360));
-        villager.setPitch((float) (Math.random() * 360));
+        villager.setHeadYaw(0);
+        villager.setPitch(0);
+
+        // Add a axe to hand
+        // Create new item stack for the axe
+        net.minecraft.item.ItemStack axeStack = 
+            new net.minecraft.item.ItemStack(Items.IRON_AXE); // Example, use any axe item
+
+        // Set the villager's main hand to the axe
+        villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, axeStack);
 
         // swing arms
         villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
@@ -205,7 +214,7 @@ public class WoodcutterBrain {
             return;
         }
 
-        int searchRadius = 10;
+        int searchRadius = 20;
         BlockPos villagerPos = villager.getBlockPos();
         Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
         // Search for first gatherable item in range
@@ -242,7 +251,7 @@ public class WoodcutterBrain {
 
     private static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
             Brain<?> brain) {
-        int searchRadius = 10;
+        int searchRadius = 20;
         BlockPos villagerPos = villager.getBlockPos();
         BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius);
         BlockPos foundLog = found != null ? found[0] : null;
@@ -252,7 +261,7 @@ public class WoodcutterBrain {
                     + ", approach at " + foundApproach.toShortString());
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, foundLog);
             // Ensure approach is walkable (not inside block, on ground)
-            BlockPos walkableApproach = foundApproach;
+            BlockPos walkableApproach = foundLog;
             while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down())
                     && walkableApproach.getY() > 0) {
                 walkableApproach = walkableApproach.down();
@@ -262,7 +271,7 @@ public class WoodcutterBrain {
                     new net.minecraft.entity.ai.brain.WalkTarget(
                             new net.minecraft.entity.ai.brain.BlockPosLookTarget(walkableApproach),
                             0.6F,
-                            1 // completion range
+                            3 // completion range
                     ));
 
             setJobStatus(brain, villager, "walking");
@@ -437,7 +446,7 @@ public class WoodcutterBrain {
             villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
             // Remember the target block and start breaking
 
-            brain.remember(ModMemoryModules.BREAK_PROGRESS, 0);
+            brain.remember(ModMemoryModules.BREAK_PROGRESS, 0f);
             setJobStatus(brain, villager, "breaking");
         }
     }
@@ -461,19 +470,41 @@ public class WoodcutterBrain {
         villager.setHeadYaw(yaw);
         villager.setPitch(pitch);
     }
+
+    private static int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
+        ItemStack heldItem = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND);
+        BlockState state = villager.getWorld().getBlockState(targetLog);
+
+        // Get block hardness
+        float hardness = state.getHardness(villager.getWorld(), targetLog);
+        if (hardness < 0) return Integer.MAX_VALUE; // Unbreakable
+
+        // Get tool effectiveness
+        float toolSpeed = heldItem.getMiningSpeedMultiplier(state);
+
+        // If the tool is not effective, use a default speed
+        if (toolSpeed <= 1.0f) toolSpeed = 1.0f;
+
+        // Calculate break time (formula: hardness * 30 / toolSpeed)
+        int ticks = Math.round(hardness * 30.0f / toolSpeed);
+
+        // Minimum 1 tick
+        return Math.max(ticks, 1);
+    }
+
     private static void keepBreakingBlock(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
         // Continue breaking logic
-        int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
+        Float breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0f);
         // Animate breaking progress (0-10)
-        world.setBlockBreakingInfo(villager.getId(), targetLog, breakProgress);
-        // Swing hand to animate breaking
-        villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        world.setBlockBreakingInfo(villager.getId(), targetLog, Math.round(breakProgress));
         // Look at the block
         lookAtBlock(villager, targetLog);
 
         if (breakProgress < 10) {
-            brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + 1);
+            int ticksToBreak = blockBreakTime(targetLog, villager);
+            float progressPerTick = 10f / ticksToBreak;
+            brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + progressPerTick);
         } else {
             System.out.println("[WoodcutterBrain] Actually breaking block at " + targetLog.toShortString());
             world.breakBlock(targetLog, true, villager);
@@ -674,6 +705,9 @@ public class WoodcutterBrain {
             brain.remember(ModMemoryModules.KEEP_PILLARING, false);
             return;
         }
+
+        // Look down
+        villager.setPitch(-90); // Look straight down
 
         // Create dirt block under the villager
         BlockPos dirtPos = villagerPos;

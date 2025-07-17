@@ -16,7 +16,7 @@ public class ModMemoryModules {
     public static final MemoryModuleType<BlockPos> TARGET_BREAK_BLOCK =
         new MemoryModuleType<>(Optional.empty());
 
-    public static final MemoryModuleType<Integer> BREAK_PROGRESS =
+    public static final MemoryModuleType<Float> BREAK_PROGRESS =
         new MemoryModuleType<>(Optional.empty());
 
     public static final MemoryModuleType<Long> NO_WORK_UNTIL_TICK =
