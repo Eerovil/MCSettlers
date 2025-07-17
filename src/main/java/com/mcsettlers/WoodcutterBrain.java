@@ -28,16 +28,6 @@ import java.util.Set;
 import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain {
-    // Find an axe in the villager's inventory
-    private static net.minecraft.item.ItemStack findAxeInInventory(VillagerEntity villager) {
-        for (int i = 0; i < villager.getInventory().size(); i++) {
-            net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
-            if (stack.getItem() instanceof net.minecraft.item.AxeItem) {
-                return stack;
-            }
-        }
-        return net.minecraft.item.ItemStack.EMPTY;
-    }
 
     // Raycast from villager to target block, return first log/leaf in the way
     // (excluding target)
@@ -328,6 +318,31 @@ public class WoodcutterBrain {
                 return false;
             }
 
+    private static void getBestToolFromChest(
+            ChestBlockEntity chest, VillagerEntity villager) {
+        // Find the best axe in the chest
+        net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
+        int bestAxeIndex = -1;
+        BlockState logs = Blocks.OAK_LOG.getDefaultState();
+        for (int i = 0; i < chest.size(); i++) {
+            net.minecraft.item.ItemStack stack = chest.getStack(i);
+            float miningSpeed = stack.getMiningSpeedMultiplier(logs);
+            if (miningSpeed <= 1.0f) continue; // Not an axe or not effective
+            if (bestAxe.isEmpty() || miningSpeed > bestAxe.getMiningSpeedMultiplier(logs)) {
+                bestAxe = stack;
+                bestAxeIndex = i;
+            }
+        }
+        if (!bestAxe.isEmpty()) {
+            // Set the best axe in the villager's hand
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, bestAxe);
+            MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} took best axe from chest: {}", villager.getUuidAsString(), bestAxe);
+            // Remove the axe from the chest
+            chest.setStack(bestAxeIndex, net.minecraft.item.ItemStack.EMPTY);
+            villager.getInventory().addStack(bestAxe);
+        }
+    }
+
     private static void keepDepositingItems(
             VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
 
@@ -373,8 +388,9 @@ public class WoodcutterBrain {
                         villager.getInventory().removeStack(i);
                         continue;
                     }
-
                 }
+                // Then, select the best axe from the chest
+                getBestToolFromChest(chestEntity, villager);
             }
 
             setJobStatus(brain, villager, "idle");
@@ -432,13 +448,6 @@ public class WoodcutterBrain {
                 targetLog = obstructing;
                 brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, obstructing);
                 targetLog = obstructing;
-            }
-            // Get or initialize breaking progress
-            // Axe holding logic
-            net.minecraft.item.ItemStack axeStack = findAxeInInventory(villager);
-            if (!axeStack.isEmpty()) {
-                System.out.println("[WoodcutterBrain] Villager holding axe: " + axeStack);
-                villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, axeStack);
             }
 
             // Animate breaking progress (0-10)
@@ -509,7 +518,7 @@ public class WoodcutterBrain {
             System.out.println("[WoodcutterBrain] Actually breaking block at " + targetLog.toShortString());
             world.breakBlock(targetLog, true, villager);
             world.setBlockBreakingInfo(villager.getId(), targetLog, -1); // clear animation
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+
             brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
             brain.forget(ModMemoryModules.BREAK_PROGRESS);
             // if pillaring, keep pillaring
@@ -521,7 +530,19 @@ public class WoodcutterBrain {
                     setJobStatus(brain, villager, "stopping_pillaring");
                 }
             } else {
-                setJobStatus(brain, villager, "idle");
+                // If lots of stuff in inventory, set job status to deposit items
+                int itemCount = 0;
+                for (int i = 0; i < villager.getInventory().size(); i++) {
+                    net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
+                    if (!stack.isEmpty()) {
+                        itemCount += stack.getCount();
+                    }
+                }
+                if (itemCount > 10) {
+                    setJobStatus(brain, villager, "deposit_items");
+                } else {
+                    setJobStatus(brain, villager, "idle");
+                }
             }
         }
     }
@@ -707,7 +728,7 @@ public class WoodcutterBrain {
         }
 
         // Look down
-        villager.setPitch(-90); // Look straight down
+        villager.setPitch(90); // Look straight down
 
         // Create dirt block under the villager
         BlockPos dirtPos = villagerPos;
