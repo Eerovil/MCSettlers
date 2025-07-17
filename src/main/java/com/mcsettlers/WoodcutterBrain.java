@@ -393,7 +393,7 @@ public class WoodcutterBrain {
                 getBestToolFromChest(chestEntity, villager);
             }
 
-            setJobStatus(brain, villager, "idle");
+            setJobStatus(brain, villager, "picking_up_blocks");
             return;
         }
 
