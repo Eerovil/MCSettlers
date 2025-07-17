@@ -23,6 +23,10 @@
 		{
 			"config": "mcsettlers.mixins.json",
 			"environment": "server"
+		},
+		{
+			"config": "mcsettlers.mixins.json",
+			"environment": "client"
 		}
 	],
 	"depends": {
