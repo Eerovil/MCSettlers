@@ -89,7 +89,7 @@ public class WoodcutterBrain {
 
         // When breaking or pillaring, disable AI to prevent movement
         // Otherwise enable AI
-        if (jobStatus.equals("breaking") || jobStatus.equals("pillaring") || jobStatus.equals("stopping_pillaring")) {
+        if (jobStatus.equals("breaking") || jobStatus.equals("pillaring") || jobStatus.equals("stopping_pillaring") || jobStatus.equals("dancing")) {
             villager.setAiDisabled(true);
         } else {
             villager.setAiDisabled(false);
@@ -112,6 +112,10 @@ public class WoodcutterBrain {
 
         if (workstation == null)
             return;
+
+        // if (dance(villager, world, brain, workstation)) {
+        //     return;
+        // }
 
         if (jobStatus == "walking") {
             if (walkTarget != null) {
@@ -164,6 +168,34 @@ public class WoodcutterBrain {
         }
     }
 
+    private static boolean dance(VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+        // Test what animations are available
+        // This is just a placeholder for testing purposes
+        // In a real implementation, you would trigger an animation here
+        // For example, using villager.playAnimation(AnimationType.DANCE);
+        // Only run code every 20 ticks
+        if (world.getTime() % 20 != 0) {
+            return true; // Skip this tick
+        }
+        
+        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager is dancing!");
+        // look in a random direction
+        villager.setHeadYaw((float) (Math.random() * 360));
+        villager.setPitch((float) (Math.random() * 360));
+
+        // swing arms
+        villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+
+        setJobStatus(brain, villager, "dancing");
+        
+        // Optionally play an animation here
+        // villager.playAnimation(AnimationType.DANCE);
+        // This is just a placeholder, actual animation logic would go here
+        // For example, using villager.playAnimation(AnimationType.DANCE);
+        return true;
+
+    }
+
     private static void keepPickingUpBlocks(
         VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
 
@@ -178,7 +210,7 @@ public class WoodcutterBrain {
         Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
         // Search for first gatherable item in range
         for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
+            for (int dy = -2; dy <= 1; dy++) {
                 for (int dz = -searchRadius; dz <= searchRadius; dz++) {
                     BlockPos pos = villagerPos.add(dx, dy, dz);
                     if (workstation != null && workstation.getSquaredDistance(pos) > searchRadius * searchRadius) continue;
@@ -409,13 +441,36 @@ public class WoodcutterBrain {
             setJobStatus(brain, villager, "breaking");
         }
     }
+    public static void lookAtBlock(VillagerEntity villager, BlockPos target) {
+        Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
+        Vec3d targetCenter = Vec3d.ofCenter(target);
+        Vec3d dir = targetCenter.subtract(eyePos);
 
+        double dx = dir.x;
+        double dy = dir.y;
+        double dz = dir.z;
+
+        double distanceXZ = Math.sqrt(dx * dx + dz * dz);
+
+        // Yaw: rotation around Y axis (horizontal)
+        float yaw = (float) (Math.toDegrees(Math.atan2(-dx, dz)));
+        // Pitch: rotation around X axis (vertical)
+        float pitch = (float) (Math.toDegrees(-Math.atan2(dy, distanceXZ)));
+
+        villager.setYaw(yaw);
+        villager.setHeadYaw(yaw);
+        villager.setPitch(pitch);
+    }
     private static void keepBreakingBlock(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
         // Continue breaking logic
         int breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0);
         // Animate breaking progress (0-10)
         world.setBlockBreakingInfo(villager.getId(), targetLog, breakProgress);
+        // Swing hand to animate breaking
+        villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        // Look at the block
+        lookAtBlock(villager, targetLog);
 
         if (breakProgress < 10) {
             brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + 1);
