@@ -47,6 +47,9 @@ public class ModProfessions {
         // Add apple item
         gatherableItems.add(Items.APPLE);
 
+        // Add sticks item
+        gatherableItems.add(Items.STICK);
+
         Set<Block> secondaryJobSites = new HashSet<>();
         // Add all log blocks as secondary job sites
         secondaryJobSites.add(Blocks.OAK_LOG);

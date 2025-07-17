@@ -5,6 +5,7 @@ import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.item.Item;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.mcsettlers.utils.RadiusGenerator;
 
@@ -119,6 +121,8 @@ public class WoodcutterBrain {
             keepPillaring(villager, world, targetLog, brain);
         } else if (jobStatus == "stopping_pillaring") {
             keepStoppingPillaring(villager, world, targetLog, brain);
+        } else if (jobStatus == "picking_up_blocks") {
+            keepPickingUpBlocks(villager, world, brain, workstation);
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
@@ -128,7 +132,7 @@ public class WoodcutterBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                setJobStatus(brain, villager, "idle");
+                setJobStatus(brain, villager, "picking_up_blocks");
                 // If very far from workstation, walk to it
                 if (villager.getBlockPos().getSquaredDistance(workstation) > 30) {
                     brain.remember(MemoryModuleType.WALK_TARGET,
@@ -145,6 +149,50 @@ public class WoodcutterBrain {
         if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
             MCSettlers.LOGGER.info("[WoodcutterBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
         }
+    }
+
+    private static void keepPickingUpBlocks(
+        VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+
+        // If currently walking, return;
+        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
+        if (optionalWalkTarget.isPresent()) {
+            return;
+        }
+
+        int searchRadius = 10;
+        BlockPos villagerPos = villager.getBlockPos();
+        Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
+        // Search for first gatherable item in range
+        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
+                    BlockPos pos = villagerPos.add(dx, dy, dz);
+                    if (workstation != null && workstation.getSquaredDistance(pos) > searchRadius * searchRadius) continue;
+                    if (!world.isChunkLoaded(pos)) continue;
+                    // Check for item entity at this position
+                    List<net.minecraft.entity.ItemEntity> items = world.getEntitiesByClass(net.minecraft.entity.ItemEntity.class,
+                        new net.minecraft.util.math.Box(pos),
+                        itemEntity -> gatherableItems.contains(itemEntity.getStack().getItem()));
+                    if (!items.isEmpty()) {
+                        net.minecraft.entity.ItemEntity targetItem = items.get(0);
+                        BlockPos itemPos = targetItem.getBlockPos();
+                        brain.remember(MemoryModuleType.WALK_TARGET,
+                            new WalkTarget(
+                                new net.minecraft.entity.ai.brain.BlockPosLookTarget(itemPos),
+                                0.6F,
+                                1
+                            )
+                        );
+                        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} walking to gatherable item {} at {}", villager.getUuidAsString(), targetItem.getStack().getItem(), itemPos);
+                        return;
+                    }
+                }
+            }
+        }
+        MCSettlers.LOGGER.info("[WoodcutterBrain] No gatherable items found in radius " + searchRadius + " around " + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+        // If no item found, set job status to idle
+        setJobStatus(brain, villager, "idle");
     }
 
     private static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
