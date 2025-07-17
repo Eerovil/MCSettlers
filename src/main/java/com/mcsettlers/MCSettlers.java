@@ -16,15 +16,54 @@ public class MCSettlers implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ModPOIs.register();
-		ModProfessions.register();
 		ModMemoryModules.register();
+		ModProfessions.register();
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (ServerWorld world : server.getWorlds()) {
 				// Use getEntitiesByType for all loaded villagers
-				for (VillagerEntity villager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER, v -> true)) {
-					if (villager.getVillagerData().profession().matchesKey(VillagerProfession.FLETCHER)) {
+				for (VillagerEntity villager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER,
+						v -> true)) {
+					VillagerData data = villager.getVillagerData();
+					RegistryEntry<VillagerProfession> profession = data.profession();
+					if (profession != null && profession.matchesKey(VillagerProfession.FLETCHER)) {
+						VillagerProfession woodcutter = Registries.VILLAGER_PROFESSION.get(ModProfessions.WOODCUTTER);
+						RegistryEntry<VillagerProfession> woodcutterEntry = null;
+						if (woodcutter != null) {
+							int rawId = Registries.VILLAGER_PROFESSION.getRawId(woodcutter);
+							woodcutterEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
+						}
+						if (woodcutterEntry != null) {
+							villager.setVillagerData(new VillagerData(
+									data.type(),
+									woodcutterEntry,
+									data.level()));
+							LOGGER.info("Changed villager profession to WOODCUTTER: {}", villager.getUuid());
+						}
+					}
+					if (profession != null && profession.matchesKey(ModProfessions.WOODCUTTER)) {
 						WoodcutterBrain.tick(villager, world);
+					}
+				}
+			}
+		});
+
+		ServerWorldEvents.LOAD.register((server, world) -> {
+			for (Entity entity : world.iterateEntities()) {
+				if (entity instanceof VillagerEntity villager) {
+					VillagerData data = villager.getVillagerData();
+					if (data.profession() != null && data.profession().matchesKey(VillagerProfession.FLETCHER)) {
+						VillagerProfession woodcutter = Registries.VILLAGER_PROFESSION.get(ModProfessions.WOODCUTTER);
+						if (woodcutter != null) {
+							int rawId = Registries.VILLAGER_PROFESSION.getRawId(woodcutter);
+							RegistryEntry<VillagerProfession> woodcutterEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
+							if (woodcutterEntry != null) {
+								villager.setVillagerData(new VillagerData(
+										data.type(),
+										woodcutterEntry,
+										data.level()));
+							}
+						}
 					}
 				}
 			}

@@ -62,9 +62,17 @@ public class WoodcutterBrain {
     public static void tick(VillagerEntity villager, ServerWorld world) {
         long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
-        String jobStatus = brain.getOptionalMemory(ModMemoryModules.JOB_STATUS)
-                .orElse("unknown");
-        
+
+        Optional<String> optionalJobStatus = brain.getOptionalMemory(ModMemoryModules.JOB_STATUS);
+        if (optionalJobStatus == null) {
+            MCSettlers.LOGGER.warn("[WoodcutterBrain] Villager " + villager.getUuidAsString()
+                    + " has no job status memory, setting to idle.");
+            setJobStatus(brain, villager, "idle");
+            return;
+        }
+
+        String jobStatus = optionalJobStatus.orElse("unknown");
+
         if (jobStatus == null || jobStatus.isEmpty() || jobStatus.equals("unknown")) {
             // If job status is unknown, set it to idle
             setJobStatus(brain, villager, "idle");
