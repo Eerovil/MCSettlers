@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import com.google.common.collect.ImmutableList;
 import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain {
@@ -78,9 +79,25 @@ public class WoodcutterBrain {
             jobStatus = "idle"; // Update local variable to avoid repeated lookups
         }
 
+        Optional<Long> pauseUntil = brain.getOptionalMemory(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
+        if (pauseUntil != null && pauseUntil.isPresent()) {
+            long now = world.getTime();
+            if (now >= pauseUntil.get()) {
+                brain.forget(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
+            } else {
+                // If paused, skip the tick. Make sure AI is disabled to keep the villager from moving
+                villager.setAiDisabled(true);
+                return;
+            }
+        }
+
         // When breaking or pillaring, disable AI to prevent movement
         // Otherwise enable AI
-        if (jobStatus.equals("breaking") || jobStatus.equals("pillaring") || jobStatus.equals("stopping_pillaring") || jobStatus.equals("dancing")) {
+        ImmutableList<String> nonAIJobs = ImmutableList.of(
+            "breaking", "pillaring", "stopping_pillaring", "dancing"
+        );
+
+        if (nonAIJobs.contains(jobStatus)) {
             villager.setAiDisabled(true);
         } else {
             villager.setAiDisabled(false);
@@ -193,6 +210,12 @@ public class WoodcutterBrain {
         // For example, using villager.playAnimation(AnimationType.DANCE);
         return true;
 
+    }
+
+    private static void pauseForMS(ServerWorld world, Brain<?> brain, long duration) {
+        int pauseDuration = (int) (duration / 50); // Convert ms to ticks (20 ticks = 1 second)
+        long pauseUntil = world.getTime() + pauseDuration;
+        brain.remember(ModMemoryModules.PAUSE_EVERYTHING_UNTIL, pauseUntil);
     }
 
     private static void keepPickingUpBlocks(
@@ -335,11 +358,11 @@ public class WoodcutterBrain {
         }
         if (!bestAxe.isEmpty()) {
             // Set the best axe in the villager's hand
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, bestAxe);
             MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} took best axe from chest: {}", villager.getUuidAsString(), bestAxe);
             // Remove the axe from the chest
             chest.setStack(bestAxeIndex, net.minecraft.item.ItemStack.EMPTY);
             villager.getInventory().addStack(bestAxe);
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, bestAxe);
         }
     }
 
@@ -394,6 +417,7 @@ public class WoodcutterBrain {
             }
 
             setJobStatus(brain, villager, "picking_up_blocks");
+            pauseForMS(world, brain, 1000); // Pause for 1 second after depositing
             return;
         }
 
@@ -497,8 +521,28 @@ public class WoodcutterBrain {
         // Calculate break time (formula: hardness * 30 / toolSpeed)
         int ticks = Math.round(hardness * 30.0f / toolSpeed);
 
+        MCSettlers.LOGGER.info("[WoodcutterBrain] Calculated break time for " + targetLog.toShortString()
+                + ": hardness=" + hardness + ", toolSpeed=" + toolSpeed + ", ticks=" + ticks + ", using tool " + heldItem.getName().getString());
+
         // Minimum 1 tick
         return Math.max(ticks, 1);
+    }
+
+    private static void selectAxeFromInventory(BlockPos targetLog, VillagerEntity villager) {
+        // Check if the villager has an axe in their inventory
+        BlockState targetLogState = villager.getWorld().getBlockState(targetLog);
+        for (int i = 0; i < villager.getInventory().size(); i++) {
+            net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
+            float miningSpeed = stack.getMiningSpeedMultiplier(targetLogState);
+            if (miningSpeed <= 1.0f) continue; // Not an axe or not effective
+            // Set the villager's main hand to the axe
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, stack);
+            villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            MCSettlers.LOGGER.info("[WoodcutterBrain] Villager " + villager.getUuidAsString()
+                    + " selected axe from inventory: " + stack.getName().getString());
+            return; // Axe found and set, exit the loop
+        }
+        MCSettlers.LOGGER.info("[WoodcutterBrain] No axe found in inventory.");
     }
 
     private static void keepBreakingBlock(
@@ -509,6 +553,7 @@ public class WoodcutterBrain {
         world.setBlockBreakingInfo(villager.getId(), targetLog, Math.round(breakProgress));
         // Look at the block
         lookAtBlock(villager, targetLog);
+        selectAxeFromInventory(targetLog, villager);
 
         if (breakProgress < 10) {
             int ticksToBreak = blockBreakTime(targetLog, villager);

@@ -30,6 +30,7 @@ public class VillagerEntityMixin {
         modules.add(ModMemoryModules.PILLAR_BLOCKS);
         modules.add(ModMemoryModules.KEEP_PILLARING);
         modules.add(ModMemoryModules.DEPOSIT_CHEST);
+        modules.add(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
         return modules;
     }
 

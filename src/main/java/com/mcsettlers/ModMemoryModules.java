@@ -31,6 +31,9 @@ public class ModMemoryModules {
     public static final MemoryModuleType<BlockPos> DEPOSIT_CHEST =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<Long> PAUSE_EVERYTHING_UNTIL =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -53,5 +56,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "deposit_chest"),
             DEPOSIT_CHEST);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "pause_everything_until"),
+            PAUSE_EVERYTHING_UNTIL);
     }
 }
