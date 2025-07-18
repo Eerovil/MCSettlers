@@ -14,6 +14,8 @@ import net.minecraft.village.VillagerProfession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mcsettlers.brains.WoodcutterBrain;
+
 public class MCSettlers implements ModInitializer {
 	public static final String MOD_ID = "mcsettlers";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);

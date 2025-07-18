@@ -1,32 +1,27 @@
-package com.mcsettlers;
+package com.mcsettlers.brains;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
-import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-
-import com.google.common.collect.ImmutableList;
-import com.mcsettlers.utils.ChestAnimationHelper;
+import com.mcsettlers.MCSettlers;
+import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
 
-public class WoodcutterBrain {
+public class WoodcutterBrain extends WorkerBrain {
+
+    protected static Optional<BlockState> TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
 
     // Raycast from villager to target block, return first log/leaf in the way
     // (excluding target)
@@ -48,15 +43,6 @@ public class WoodcutterBrain {
         return null;
     }
 
-    private static void setJobStatus(Brain<?> brain, VillagerEntity villager, String status) {
-        brain.remember(ModMemoryModules.JOB_STATUS, status);
-        villager.setCustomName(net.minecraft.text.Text.of(status));
-        villager.setCustomNameVisible(true);
-        MCSettlers.LOGGER.info("[WoodcutterBrain] Set job status to " + status + " for villager "
-                + villager.getUuidAsString());
-        
-    }
-
     private static boolean anyItemsToDeposit(VillagerEntity villager) {
         for (ItemStack stack : villager.getInventory()) {
             if (!stack.isEmpty() && stack.getItem() != Items.AIR && stack.getCount() > 0) {
@@ -69,72 +55,10 @@ public class WoodcutterBrain {
         return false; // No items to deposit
     }
 
-    public static void tick(VillagerEntity villager, ServerWorld world) {
-        long tickStart = System.nanoTime();
-        Brain<?> brain = villager.getBrain();
-
-        Optional<String> optionalJobStatus = brain.getOptionalMemory(ModMemoryModules.JOB_STATUS);
-        if (optionalJobStatus == null) {
-            MCSettlers.LOGGER.warn("[WoodcutterBrain] Villager " + villager.getUuidAsString()
-                    + " has no job status memory, setting to idle.");
-            setJobStatus(brain, villager, "idle");
-            return;
-        }
-
-        String jobStatus = optionalJobStatus.orElse("unknown");
-
-        if (jobStatus == null || jobStatus.isEmpty() || jobStatus.equals("unknown")) {
-            // If job status is unknown, set it to idle
-            setJobStatus(brain, villager, "idle");
-            jobStatus = "idle"; // Update local variable to avoid repeated lookups
-        }
-
-        Optional<Long> pauseUntil = brain.getOptionalMemory(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
-        if (pauseUntil != null && pauseUntil.isPresent()) {
-            long now = world.getTime();
-            if (now >= pauseUntil.get()) {
-                brain.forget(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
-            } else {
-                // If paused, skip the tick. Make sure AI is disabled to keep the villager from moving
-                villager.setAiDisabled(true);
-                return;
-            }
-        }
-
-        // When breaking or pillaring, disable AI to prevent movement
-        // Otherwise enable AI
-        ImmutableList<String> nonAIJobs = ImmutableList.of(
-            "breaking", "pillaring", "stopping_pillaring", "dancing"
-        );
-
-        if (nonAIJobs.contains(jobStatus)) {
-            villager.setAiDisabled(true);
-        } else {
-            villager.setAiDisabled(false);
-        }
-
-        // Read memory values
-        BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
-                .map(GlobalPos::pos)
-                .orElse(null);
-        Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
-        BlockPos targetLog = optionalTarget != null ? optionalTarget.orElse(null) : null;
-        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
-        BlockPos walkTarget = null;
-        if (optionalWalkTarget.isPresent()) {
-            WalkTarget wt = optionalWalkTarget.get();
-            if (wt != null && wt.getLookTarget() != null) {
-                walkTarget = wt.getLookTarget().getBlockPos();
-            }
-        }
-
-        if (workstation == null)
-            return;
-
-        // if (dance(villager, world, brain, workstation)) {
-        //     return;
-        // }
-
+    protected static void handleJob(
+            VillagerEntity villager, ServerWorld world, Brain<?> brain,
+            String jobStatus, BlockPos workstation, BlockPos targetLog, BlockPos walkTarget) {
+       
         if (jobStatus == "walking") {
             if (walkTarget != null) {
                 return; // Already walking, nothing to do
@@ -181,100 +105,9 @@ public class WoodcutterBrain {
                 }
             }
         }
-
-        long tickEnd = System.nanoTime();
-        if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
-            MCSettlers.LOGGER.info("[WoodcutterBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
-        }
     }
 
-    private static boolean dance(VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
-        // Test what animations are available
-        // This is just a placeholder for testing purposes
-        // In a real implementation, you would trigger an animation here
-        // For example, using villager.playAnimation(AnimationType.DANCE);
-        // Only run code every 20 ticks
-        if (world.getTime() % 20 != 0) {
-            return true; // Skip this tick
-        }
-        
-        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager is dancing!");
-        // look in a random direction
-        villager.setHeadYaw(0);
-        villager.setPitch(0);
-
-        // Add a axe to hand
-        // Create new item stack for the axe
-        net.minecraft.item.ItemStack axeStack = 
-            new net.minecraft.item.ItemStack(Items.IRON_AXE); // Example, use any axe item
-
-        // Set the villager's main hand to the axe
-        villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, axeStack);
-
-        // swing arms
-        villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-
-        setJobStatus(brain, villager, "dancing");
-        
-        // Optionally play an animation here
-        // villager.playAnimation(AnimationType.DANCE);
-        // This is just a placeholder, actual animation logic would go here
-        // For example, using villager.playAnimation(AnimationType.DANCE);
-        return true;
-
-    }
-
-    private static void pauseForMS(ServerWorld world, Brain<?> brain, long duration) {
-        int pauseDuration = (int) (duration / 50); // Convert ms to ticks (20 ticks = 1 second)
-        long pauseUntil = world.getTime() + pauseDuration;
-        brain.remember(ModMemoryModules.PAUSE_EVERYTHING_UNTIL, pauseUntil);
-    }
-
-    private static void keepPickingUpBlocks(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
-
-        // If currently walking, return;
-        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
-        if (optionalWalkTarget.isPresent()) {
-            return;
-        }
-
-        int searchRadius = 20;
-        BlockPos villagerPos = villager.getBlockPos();
-        Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
-        // Search for first gatherable item in range
-        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (int dy = -2; dy <= 1; dy++) {
-                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
-                    BlockPos pos = villagerPos.add(dx, dy, dz);
-                    if (workstation != null && workstation.getSquaredDistance(pos) > searchRadius * searchRadius) continue;
-                    if (!world.isChunkLoaded(pos)) continue;
-                    // Check for item entity at this position
-                    List<net.minecraft.entity.ItemEntity> items = world.getEntitiesByClass(net.minecraft.entity.ItemEntity.class,
-                        new net.minecraft.util.math.Box(pos),
-                        itemEntity -> gatherableItems.contains(itemEntity.getStack().getItem()));
-                    if (!items.isEmpty()) {
-                        net.minecraft.entity.ItemEntity targetItem = items.get(0);
-                        BlockPos itemPos = targetItem.getBlockPos();
-                        brain.remember(MemoryModuleType.WALK_TARGET,
-                            new WalkTarget(
-                                new net.minecraft.entity.ai.brain.BlockPosLookTarget(itemPos),
-                                0.6F,
-                                1
-                            )
-                        );
-                        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} walking to gatherable item {} at {}", villager.getUuidAsString(), targetItem.getStack().getItem(), itemPos);
-                        return;
-                    }
-                }
-            }
-        }
-        MCSettlers.LOGGER.info("[WoodcutterBrain] No gatherable items found in radius " + searchRadius + " around " + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
-        // If no item found, set job status to idle
-        setJobStatus(brain, villager, "idle");
-    }
-
-    private static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
+    protected static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
             Brain<?> brain) {
         int searchRadius = 20;
         BlockPos villagerPos = villager.getBlockPos();
@@ -303,164 +136,6 @@ public class WoodcutterBrain {
         } else {
             setJobStatus(brain, villager, "no_work");
         }
-    }
-
-    private static Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation) {
-        int searchRadius = 10;
-        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
-                    BlockPos pos = workstation.add(dx, dy, dz);
-                    if (!world.isChunkLoaded(pos)) continue;
-                    BlockState state = world.getBlockState(pos);
-                    if (state.isOf(Blocks.CHEST)) {
-                        return Optional.of(pos);
-                    }
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static boolean addStackToChest(
-            ChestBlockEntity chest, ItemStack stack) {
-                int emptySlot = -1;
-                for (int i = 0; i < chest.size(); i++) {
-                    ItemStack chestStack = chest.getStack(i);
-                    if (chestStack.isEmpty() && emptySlot == -1) {
-                        emptySlot = i;
-                        continue;
-                    }
-                    // Check if the item can be added to this slot
-                    if (chestStack.isOf(stack.getItem())) {
-                        int countToAdd = Math.min(stack.getCount(), chestStack.getMaxCount() - chestStack.getCount());
-                        if (countToAdd > 0) {
-                            chestStack.increment(countToAdd);
-                            stack.decrement(countToAdd);
-                        }
-                    }
-                    // If stack is empty, we can stop
-                    if (stack.isEmpty()) {
-                        return true;
-                    }
-                }
-                // Add to any empty slot in the chest
-                if (emptySlot != -1) {
-                    chest.setStack(emptySlot, stack);
-                    return true;
-                }
-                // No empty slot found
-                return false;
-            }
-
-    private static void getBestToolFromChest(
-            ChestBlockEntity chest, VillagerEntity villager) {
-        // Find the best axe in the chest
-        net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
-        int bestAxeIndex = -1;
-        BlockState logs = Blocks.OAK_LOG.getDefaultState();
-        for (int i = 0; i < chest.size(); i++) {
-            net.minecraft.item.ItemStack stack = chest.getStack(i);
-            float miningSpeed = stack.getMiningSpeedMultiplier(logs);
-            if (miningSpeed <= 1.0f) continue; // Not an axe or not effective
-            if (bestAxe.isEmpty() || miningSpeed > bestAxe.getMiningSpeedMultiplier(logs)) {
-                bestAxe = stack;
-                bestAxeIndex = i;
-            }
-        }
-        if (!bestAxe.isEmpty()) {
-            // Set the best axe in the villager's hand
-            MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} took best axe from chest: {}", villager.getUuidAsString(), bestAxe);
-            // Remove the axe from the chest
-            chest.setStack(bestAxeIndex, net.minecraft.item.ItemStack.EMPTY);
-            villager.getInventory().addStack(bestAxe);
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, bestAxe);
-        }
-    }
-
-    private static void keepDepositingItems(
-            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
-
-        // If currently walking, return;
-        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
-        if (optionalWalkTarget.isPresent()) {
-            return;
-        }
-
-        // If no items to deposit, set job status to idle
-        if (villager.getInventory().isEmpty()) {
-            setJobStatus(brain, villager, "idle");
-            return;
-        }
-
-        // Find a chest to deposit items
-        Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
-        if (chestPos.isEmpty()) {
-            chestPos = findDepositChest(world, workstation);
-            if (chestPos.isPresent()) {
-                brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
-            } else {
-                MCSettlers.LOGGER.info("[WoodcutterBrain] No nearby chest found for villager " + villager.getUuidAsString());
-                setJobStatus(brain, villager, "idle");
-                return;
-            }
-        }
-
-        BlockPos pos = chestPos.get();
-
-        // If close to chest, deposit items
-        if (villager.squaredDistanceTo(Vec3d.ofCenter(pos)) < 2.0) {
-            BlockEntity chest = world.getBlockEntity(pos);
-            if (chest instanceof net.minecraft.block.entity.ChestBlockEntity chestEntity) {
-                // To open the chest
-                ChestAnimationHelper.animateChest(world, pos, true);
-
-                for (int i = 0; i < villager.getInventory().size(); i++) {
-                    net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
-                    if (stack.isEmpty()) continue;
-
-                    // Try to add the stack to the chest
-                    if (addStackToChest(chestEntity, stack)) {
-                        // Successfully added the stack
-                        villager.getInventory().removeStack(i);
-                        continue;
-                    }
-                }
-                // Then, select the best axe from the chest
-                getBestToolFromChest(chestEntity, villager);
-            }
-
-            setJobStatus(brain, villager, "stop_deposit_items");
-
-            // Turn head towards the chest
-            lookAtBlock(villager, pos);
-
-            pauseForMS(world, brain, 1000); // Pause for 1 second after depositing
-            return;
-        }
-
-        brain.remember(MemoryModuleType.WALK_TARGET,
-                new net.minecraft.entity.ai.brain.WalkTarget(
-                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos),
-                        0.6F,
-                        1
-                ));
-        MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} walking to deposit items at {}", villager.getUuidAsString(), pos);
-
-    }
-
-    private static void stopDepositingItems(
-            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
-
-        // Close the chest
-        Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
-        if (chestPos.isPresent()) {
-            BlockPos pos = chestPos.get();
-            ChestAnimationHelper.animateChest(world, pos, false);
-        }
-
-        // Set job status to idle
-        setJobStatus(brain, villager, "picking_up_blocks");
     }
 
     private static void startBreakingBlock(
@@ -515,67 +190,6 @@ public class WoodcutterBrain {
             setJobStatus(brain, villager, "breaking");
         }
     }
-    public static void lookAtBlock(VillagerEntity villager, BlockPos target) {
-        Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
-        Vec3d targetCenter = Vec3d.ofCenter(target);
-        Vec3d dir = targetCenter.subtract(eyePos);
-
-        double dx = dir.x;
-        double dy = dir.y;
-        double dz = dir.z;
-
-        double distanceXZ = Math.sqrt(dx * dx + dz * dz);
-
-        // Yaw: rotation around Y axis (horizontal)
-        float yaw = (float) (Math.toDegrees(Math.atan2(-dx, dz)));
-        // Pitch: rotation around X axis (vertical)
-        float pitch = (float) (Math.toDegrees(-Math.atan2(dy, distanceXZ)));
-
-        villager.setYaw(yaw);
-        villager.setHeadYaw(yaw);
-        villager.setPitch(pitch);
-    }
-
-    private static int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
-        ItemStack heldItem = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND);
-        BlockState state = villager.getWorld().getBlockState(targetLog);
-
-        // Get block hardness
-        float hardness = state.getHardness(villager.getWorld(), targetLog);
-        if (hardness < 0) return Integer.MAX_VALUE; // Unbreakable
-
-        // Get tool effectiveness
-        float toolSpeed = heldItem.getMiningSpeedMultiplier(state);
-
-        // If the tool is not effective, use a default speed
-        if (toolSpeed <= 1.0f) toolSpeed = 1.0f;
-
-        // Calculate break time (formula: hardness * 30 / toolSpeed)
-        int ticks = Math.round(hardness * 30.0f / toolSpeed);
-
-        MCSettlers.LOGGER.info("[WoodcutterBrain] Calculated break time for " + targetLog.toShortString()
-                + ": hardness=" + hardness + ", toolSpeed=" + toolSpeed + ", ticks=" + ticks + ", using tool " + heldItem.getName().getString());
-
-        // Minimum 1 tick
-        return Math.max(ticks, 1);
-    }
-
-    private static void selectAxeFromInventory(BlockPos targetLog, VillagerEntity villager) {
-        // Check if the villager has an axe in their inventory
-        BlockState targetLogState = villager.getWorld().getBlockState(targetLog);
-        for (int i = 0; i < villager.getInventory().size(); i++) {
-            net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
-            float miningSpeed = stack.getMiningSpeedMultiplier(targetLogState);
-            if (miningSpeed <= 1.0f) continue; // Not an axe or not effective
-            // Set the villager's main hand to the axe
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, stack);
-            villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
-            MCSettlers.LOGGER.info("[WoodcutterBrain] Villager " + villager.getUuidAsString()
-                    + " selected axe from inventory: " + stack.getName().getString());
-            return; // Axe found and set, exit the loop
-        }
-        MCSettlers.LOGGER.info("[WoodcutterBrain] No axe found in inventory.");
-    }
 
     private static void keepBreakingBlock(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
@@ -585,7 +199,7 @@ public class WoodcutterBrain {
         world.setBlockBreakingInfo(villager.getId(), targetLog, Math.round(breakProgress));
         // Look at the block
         lookAtBlock(villager, targetLog);
-        selectAxeFromInventory(targetLog, villager);
+        selectToolFromInventory(targetLog, villager);
 
         if (breakProgress < 10) {
             int ticksToBreak = blockBreakTime(targetLog, villager);
