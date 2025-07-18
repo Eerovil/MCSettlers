@@ -57,6 +57,18 @@ public class WoodcutterBrain {
         
     }
 
+    private static boolean anyItemsToDeposit(VillagerEntity villager) {
+        for (ItemStack stack : villager.getInventory()) {
+            if (!stack.isEmpty() && stack.getItem() != Items.AIR && stack.getCount() > 0) {
+                // If stack is one of villager.gatherableItems(), return true
+                if (villager.getVillagerData().profession().value().gatherableItems().contains(stack.getItem())) {
+                    return true;
+                }
+            }
+        }
+        return false; // No items to deposit
+    }
+
     public static void tick(VillagerEntity villager, ServerWorld world) {
         long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
@@ -153,7 +165,7 @@ public class WoodcutterBrain {
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
                 // If items in inventory, set job status to deposit items
-                if (!villager.getInventory().isEmpty()) {
+                if (anyItemsToDeposit(villager)) {
                     setJobStatus(brain, villager, "deposit_items");
                 } else {
                     setJobStatus(brain, villager, "picking_up_blocks");
@@ -739,7 +751,7 @@ public class WoodcutterBrain {
 
         BlockPos villagerPos = villager.getBlockPos();
         // Find log with y coordinate greater than villager's aand within radius 6 in X and Z
-        Iterable<BlockPos> nearbyLogs = RadiusGenerator.radiusCoordinates(villagerPos, 4, pos -> {
+        Iterable<BlockPos> nearbyLogs = RadiusGenerator.radiusCoordinates(villagerPos, 3, pos -> {
             BlockState state = world.getBlockState(pos);
             return (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES))
                     && pos.getY() > villagerPos.getY();
