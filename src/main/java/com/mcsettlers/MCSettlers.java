@@ -10,15 +10,39 @@ import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.village.VillagerData;
 import net.minecraft.village.VillagerProfession;
+import net.minecraft.registry.RegistryKey;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mcsettlers.brains.ForesterBrain;
 import com.mcsettlers.brains.WoodcutterBrain;
+import com.mcsettlers.brains.WorkerBrain;
 
 public class MCSettlers implements ModInitializer {
 	public static final String MOD_ID = "mcsettlers";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+	private static final Map<UUID, WorkerBrain> villagerBrains = new HashMap<>();
+
+	public static WorkerBrain getBrainFor(VillagerEntity villager) {
+		return villagerBrains.computeIfAbsent(
+			villager.getUuid(),
+			uuid -> {
+				// Choose correct brain type based on profession
+				if (villager.getVillagerData().profession().matchesKey(ModProfessions.WOODCUTTER)) {
+					return new WoodcutterBrain();
+				} else if (villager.getVillagerData().profession().matchesKey(ModProfessions.FORESTER)) {
+					return new ForesterBrain();
+				}
+				return null;
+			}
+		);
+	}
 
 	@Override
 	public void onInitialize() {
@@ -33,23 +57,30 @@ public class MCSettlers implements ModInitializer {
 						v -> true)) {
 					VillagerData data = villager.getVillagerData();
 					RegistryEntry<VillagerProfession> profession = data.profession();
-					if (profession != null && profession.matchesKey(VillagerProfession.FLETCHER)) {
-						VillagerProfession woodcutter = Registries.VILLAGER_PROFESSION.get(ModProfessions.WOODCUTTER);
-						RegistryEntry<VillagerProfession> woodcutterEntry = null;
-						if (woodcutter != null) {
-							int rawId = Registries.VILLAGER_PROFESSION.getRawId(woodcutter);
-							woodcutterEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
-						}
-						if (woodcutterEntry != null) {
-							villager.setVillagerData(new VillagerData(
-									data.type(),
-									woodcutterEntry,
-									data.level()));
-							LOGGER.info("Changed villager profession to WOODCUTTER: {}", villager.getUuid());
+
+					if (profession != null) {
+						RegistryKey<VillagerProfession> vanillaKey = profession.getKey().orElse(null);
+						RegistryKey<VillagerProfession> customKey = ModProfessions.VANILLA_TO_CUSTOM_PROFESSION_MAP.get(vanillaKey);
+						if (customKey != null) {
+							VillagerProfession customProfession = Registries.VILLAGER_PROFESSION.get(customKey);
+							if (customProfession != null) {
+								int rawId = Registries.VILLAGER_PROFESSION.getRawId(customProfession);
+								RegistryEntry<VillagerProfession> customEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
+								if (customEntry != null) {
+									villager.setVillagerData(new VillagerData(
+											data.type(),
+											customEntry,
+											data.level()));
+									LOGGER.info("Changed villager profession to custom: {} -> {}", villager.getUuid(), customKey.getValue());
+								}
+							}
 						}
 					}
-					if (profession != null && profession.matchesKey(ModProfessions.WOODCUTTER)) {
-						WoodcutterBrain.tick(villager, world);
+					if (profession != null) {
+						WorkerBrain brain = getBrainFor(villager);
+						if (brain != null) {
+							brain.tick(villager, world); // Calls the appropriate brain's tick method
+						}
 					}
 				}
 			}

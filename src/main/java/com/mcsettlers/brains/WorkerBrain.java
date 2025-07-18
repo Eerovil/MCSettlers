@@ -1,5 +1,6 @@
 package com.mcsettlers.brains;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -26,12 +27,12 @@ import net.minecraft.util.math.Vec3d;
 
 public class WorkerBrain {
     // Optional block state for the target block. This is used to select the best tool from the chest.
-    protected static Optional<BlockState> TARGET_BLOCK_STATE = Optional.empty();
-    protected static final Set<String> NON_AI_JOBS = ImmutableSet.of(
+    protected Optional<BlockState> TARGET_BLOCK_STATE = Optional.empty();
+    protected final Set<String> NON_AI_JOBS = ImmutableSet.of(
         "breaking"
     );
 
-    public static void tick(VillagerEntity villager, ServerWorld world) {
+    public void tick(VillagerEntity villager, ServerWorld world) {
         long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
 
@@ -101,10 +102,10 @@ public class WorkerBrain {
         }
     }
 
-    protected static void handleJob(
+    protected void handleJob(
             VillagerEntity villager, ServerWorld world, Brain<?> brain,
             String jobStatus, BlockPos workstation, BlockPos targetLog, BlockPos walkTarget) {
-       
+
         if (jobStatus == "walking") {
             return;
         } else if (jobStatus == "picking_up_blocks") {
@@ -116,13 +117,13 @@ public class WorkerBrain {
         }
     }
 
-    protected static void pauseForMS(ServerWorld world, Brain<?> brain, long duration) {
+    protected void pauseForMS(ServerWorld world, Brain<?> brain, long duration) {
         int pauseDuration = (int) (duration / 50); // Convert ms to ticks (20 ticks = 1 second)
         long pauseUntil = world.getTime() + pauseDuration;
         brain.remember(ModMemoryModules.PAUSE_EVERYTHING_UNTIL, pauseUntil);
     }
 
-    protected static void setJobStatus(Brain<?> brain, VillagerEntity villager, String status) {
+    protected void setJobStatus(Brain<?> brain, VillagerEntity villager, String status) {
         brain.remember(ModMemoryModules.JOB_STATUS, status);
         villager.setCustomName(net.minecraft.text.Text.of(status));
         villager.setCustomNameVisible(true);
@@ -131,12 +132,27 @@ public class WorkerBrain {
         
     }
 
-    protected static Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation) {
+    protected Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation) {
+        // Read all other villagers' deposit chests
+        Set<BlockPos> otherPositions = new HashSet<>();
+        for (VillagerEntity otherVillager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER, v -> true)) {
+            Brain<?> otherBrain = otherVillager.getBrain();
+            Optional<BlockPos> otherChestPos = otherBrain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+            if (otherChestPos.isPresent()) {
+                BlockPos pos = otherChestPos.get();
+                otherPositions.add(pos);
+            }
+        }
+
         int searchRadius = 10;
         for (int dx = -searchRadius; dx <= searchRadius; dx++) {
             for (int dy = -2; dy <= 2; dy++) {
                 for (int dz = -searchRadius; dz <= searchRadius; dz++) {
                     BlockPos pos = workstation.add(dx, dy, dz);
+                    // Skip if this position is already used by another villager
+                    if (otherPositions.contains(pos)) {
+                        continue;
+                    }
                     BlockState state = world.getBlockState(pos);
                     if (state.isOf(Blocks.CHEST)) {
                         return Optional.of(pos);
@@ -147,7 +163,7 @@ public class WorkerBrain {
         return Optional.empty();
     }
 
-    protected static void getBestToolFromChest(
+    protected void getBestToolFromChest(
             ChestBlockEntity chest, VillagerEntity villager) {
         // Find the best axe in the chest
         net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
@@ -176,7 +192,7 @@ public class WorkerBrain {
         }
     }
 
-    protected static boolean addStackToChest(
+    protected boolean addStackToChest(
             ChestBlockEntity chest, ItemStack stack) {
                 int emptySlot = -1;
                 for (int i = 0; i < chest.size(); i++) {
@@ -207,7 +223,7 @@ public class WorkerBrain {
                 return false;
             }
 
-    protected static void stopDepositingItems(
+    protected void stopDepositingItems(
             VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
 
         // Close the chest
@@ -221,18 +237,12 @@ public class WorkerBrain {
         setJobStatus(brain, villager, "picking_up_blocks");
     }
 
-    protected static void keepDepositingItems(
+    protected void keepDepositingItems(
             VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
 
         // If currently walking, return;
         Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
         if (optionalWalkTarget.isPresent()) {
-            return;
-        }
-
-        // If no items to deposit, set job status to idle
-        if (villager.getInventory().isEmpty()) {
-            setJobStatus(brain, villager, "idle");
             return;
         }
 
@@ -244,7 +254,7 @@ public class WorkerBrain {
                 brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
             } else {
                 MCSettlers.LOGGER.info("[WorkerBrain] No nearby chest found for villager " + villager.getUuidAsString());
-                setJobStatus(brain, villager, "idle");
+                setJobStatus(brain, villager, "no_work");
                 return;
             }
         }
@@ -292,7 +302,7 @@ public class WorkerBrain {
 
     }
 
-    protected static void lookAtBlock(VillagerEntity villager, BlockPos target) {
+    protected void lookAtBlock(VillagerEntity villager, BlockPos target) {
         Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
         Vec3d targetCenter = Vec3d.ofCenter(target);
         Vec3d dir = targetCenter.subtract(eyePos);
@@ -313,7 +323,7 @@ public class WorkerBrain {
         villager.setPitch(pitch);
     }
 
-    protected static void keepPickingUpBlocks(
+    protected void keepPickingUpBlocks(
         VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
 
         // If currently walking, return;
@@ -356,7 +366,7 @@ public class WorkerBrain {
         setJobStatus(brain, villager, "idle");
     }
 
-    protected static int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
+    protected int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
         ItemStack heldItem = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND);
         BlockState state = villager.getWorld().getBlockState(targetLog);
 
@@ -380,7 +390,7 @@ public class WorkerBrain {
         return Math.max(ticks, 1);
     }
 
-    protected static void selectToolFromInventory(BlockPos targetLog, VillagerEntity villager) {
+    protected void selectToolFromInventory(BlockPos targetLog, VillagerEntity villager) {
         // Check if the villager has a tool in their inventory
         if (TARGET_BLOCK_STATE.isEmpty()) {
             return;

@@ -21,11 +21,11 @@ import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain extends WorkerBrain {
 
-    protected static Optional<BlockState> TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
+    protected Optional<BlockState> TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
 
     // Raycast from villager to target block, return first log/leaf in the way
     // (excluding target)
-    private static BlockPos getObstructingLogOrLeaf(VillagerEntity villager, ServerWorld world, BlockPos target) {
+    private BlockPos getObstructingLogOrLeaf(VillagerEntity villager, ServerWorld world, BlockPos target) {
         Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
         Vec3d targetCenter = Vec3d.ofCenter(target);
         Vec3d dir = targetCenter.subtract(eyePos).normalize();
@@ -43,7 +43,7 @@ public class WoodcutterBrain extends WorkerBrain {
         return null;
     }
 
-    private static boolean anyItemsToDeposit(VillagerEntity villager) {
+    private boolean anyItemsToDeposit(VillagerEntity villager) {
         for (ItemStack stack : villager.getInventory()) {
             if (!stack.isEmpty() && stack.getItem() != Items.AIR && stack.getCount() > 0) {
                 // If stack is one of villager.gatherableItems(), return true
@@ -55,7 +55,8 @@ public class WoodcutterBrain extends WorkerBrain {
         return false; // No items to deposit
     }
 
-    protected static void handleJob(
+    @Override
+    protected void handleJob(
             VillagerEntity villager, ServerWorld world, Brain<?> brain,
             String jobStatus, BlockPos workstation, BlockPos targetLog, BlockPos walkTarget) {
        
@@ -107,7 +108,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    protected static void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
+    protected void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation,
             Brain<?> brain) {
         int searchRadius = 20;
         BlockPos villagerPos = villager.getBlockPos();
@@ -138,7 +139,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    private static void startBreakingBlock(
+    private void startBreakingBlock(
             VillagerEntity villager, ServerWorld world,
             BlockPos targetLog, Brain<?> brain) {
 
@@ -191,7 +192,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    private static void keepBreakingBlock(
+    private void keepBreakingBlock(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
         // Continue breaking logic
         Float breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0f);
@@ -238,7 +239,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    private static BlockPos checkTargetLogForAccess(ServerWorld world, BlockPos targetLog) {
+    private BlockPos checkTargetLogForAccess(ServerWorld world, BlockPos targetLog) {
         // Check if the target log is accessible (not obstructed by blocks)
         // This is a placeholder; actual implementation would depend on game logic
         // For now, we assume all logs are accessible
@@ -250,7 +251,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
                 BlockPos adj = targetLog.offset(dir);
                 BlockState adjState = world.getBlockState(adj);
-                if (adjState.isAir()) {
+                if (adjState.isReplaceable()) {
                     approach = adj;
                     return approach;
                 }
@@ -260,7 +261,7 @@ public class WoodcutterBrain extends WorkerBrain {
     }
 
     // Find the nearest log/leaf and its approach air block
-    private static BlockPos[] findNearbyLogAndApproach(
+    private BlockPos[] findNearbyLogAndApproach(
             ServerWorld world,
             BlockPos villagerPos,
             BlockPos workstation,
@@ -335,7 +336,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
     }
 
-    private static void startPillaring(
+    private void startPillaring(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
         // Start pillaring logic
         // This is a placeholder; actual implementation would depend on game logic
@@ -346,7 +347,7 @@ public class WoodcutterBrain extends WorkerBrain {
         brain.remember(ModMemoryModules.KEEP_PILLARING, true);
     }
 
-    private static void keepPillaring(
+    private void keepPillaring(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
 
         // Only run this every 20 ticks
@@ -437,7 +438,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    public static void keepStoppingPillaring(
+    public void keepStoppingPillaring(
             VillagerEntity villager, ServerWorld world, BlockPos targetLog, Brain<?> brain) {
         // Stop pillaring logic
         // Pop latest pillar blocks from memory
