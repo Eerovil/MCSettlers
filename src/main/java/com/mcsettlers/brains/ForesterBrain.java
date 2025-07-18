@@ -53,6 +53,7 @@ public class ForesterBrain extends WorkerBrain {
                 setJobStatus(brain, villager, "deposit_items");
             }
         } else if (jobStatus == "planting") {
+            lookAtBlock(villager, targetLog);
             setJobStatus(brain, villager, "idle");
             pauseForMS(world, brain, 1000);
         } else if (jobStatus == "idle") {
@@ -69,7 +70,7 @@ public class ForesterBrain extends WorkerBrain {
         VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation)
     {
         MCSettlers.LOGGER.info("Finding new planting target for villager: {}", villager.getUuid());
-        int r2 = 9 * 9; // 9 blocks radius squared
+        int r2 = 15 * 15;
         // Logic to find a new planting target
         BlockPos villagerPos = villager.getBlockPos();
         // Get a list of all possible coordinates.
@@ -99,9 +100,9 @@ public class ForesterBrain extends WorkerBrain {
             // Set walk target with reasonable completion range and duration
             brain.remember(MemoryModuleType.WALK_TARGET,
                     new net.minecraft.entity.ai.brain.WalkTarget(
-                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos),
+                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos.up()),
                             0.6F,
-                            3 // completion range
+                            1 // completion range
                     ));
 
             setJobStatus(brain, villager, "walking");
@@ -112,8 +113,19 @@ public class ForesterBrain extends WorkerBrain {
         MCSettlers.LOGGER.info("No suitable planting target found for villager: {}", villager.getUuid());
     }
 
-    protected ItemStack getSapling() {
-        return new ItemStack(net.minecraft.item.Items.OAK_SAPLING); // Example sapling, can be replaced with any sapling type
+    protected ItemStack getSapling(VillagerEntity villager) {
+        // Get a sapling item from inventory and remove it
+        for (int i = 0; i < villager.getInventory().size(); i++) {
+            ItemStack stack = villager.getInventory().getStack(i);
+            if (stack.isIn(ItemTags.SAPLINGS) && stack.getCount() >= 1) {
+                // Create a new stack with a single sapling
+                ItemStack saplingStack = stack.copy();
+                saplingStack.setCount(1);
+                villager.getInventory().removeStack(i, 1);
+                return saplingStack;
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     protected void startPlanting(
@@ -129,12 +141,10 @@ public class ForesterBrain extends WorkerBrain {
         if (targetLog != null) {
             BlockState saplingState = world.getBlockState(targetLog);
             if (saplingState.isReplaceable()) {
-                Item saplingItem = getSapling().getItem();
+                Item saplingItem = getSapling(villager).getItem();
                 if (saplingItem instanceof net.minecraft.item.BlockItem) {
                     net.minecraft.block.Block saplingBlock = ((net.minecraft.item.BlockItem) saplingItem).getBlock();
                     world.setBlockState(targetLog, saplingBlock.getDefaultState());
-                } else {
-                    System.out.println("Expected a BlockItem for sapling, but got: " + saplingItem);
                 }
             } else {
                 MCSettlers.LOGGER.warn("Target log position {} is not replaceable for planting sapling.", saplingState);
@@ -154,6 +164,7 @@ public class ForesterBrain extends WorkerBrain {
                 saplingStack.setCount(1);
                 chest.removeStack(i, 1);
                 villager.getInventory().addStack(saplingStack);
+                return;
             }
         }
     }
