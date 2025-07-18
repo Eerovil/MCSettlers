@@ -15,13 +15,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+
+import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain extends WorkerBrain {
-
-    protected Optional<BlockState> TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
+    public WoodcutterBrain() {
+        this.TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
+        this.NON_AI_JOBS = ImmutableSet.of(
+            "breaking",
+            "pillaring",
+            "stopping_pillaring"
+        );
+    }
 
     // Raycast from villager to target block, return first log/leaf in the way
     // (excluding target)

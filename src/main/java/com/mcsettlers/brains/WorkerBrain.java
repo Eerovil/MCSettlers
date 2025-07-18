@@ -28,7 +28,7 @@ import net.minecraft.util.math.Vec3d;
 public class WorkerBrain {
     // Optional block state for the target block. This is used to select the best tool from the chest.
     protected Optional<BlockState> TARGET_BLOCK_STATE = Optional.empty();
-    protected final Set<String> NON_AI_JOBS = ImmutableSet.of(
+    protected Set<String> NON_AI_JOBS = ImmutableSet.of(
         "breaking"
     );
 
