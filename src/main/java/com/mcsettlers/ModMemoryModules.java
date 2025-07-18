@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
+import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
@@ -34,6 +35,9 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Long> PAUSE_EVERYTHING_UNTIL =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<Item> ITEM_TO_CARRY =
+        new MemoryModuleType<>(Optional.empty());
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -59,5 +63,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "pause_everything_until"),
             PAUSE_EVERYTHING_UNTIL);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "item_to_carry"),
+            ITEM_TO_CARRY);
     }
 }

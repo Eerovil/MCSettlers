@@ -20,6 +20,7 @@ import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
@@ -31,6 +32,8 @@ public class WorkerBrain {
     protected Set<String> NON_AI_JOBS = ImmutableSet.of(
         "breaking"
     );
+    // This worker wants these items in their chest
+    protected Set<TagKey<Item>> WANTED_ITEMS = ImmutableSet.of();
 
     public void tick(VillagerEntity villager, ServerWorld world) {
         long tickStart = System.nanoTime();
@@ -87,8 +90,11 @@ public class WorkerBrain {
             }
         }
 
-        if (workstation == null)
-            return;
+        if (workstation == null) {
+            if (!(this instanceof CarrierBrain)) {
+                return;
+            }
+        }
 
         // if (dance(villager, world, brain, workstation)) {
         //     return;

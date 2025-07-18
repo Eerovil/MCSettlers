@@ -2,6 +2,7 @@ package com.mcsettlers.brains;
 
 import java.util.Optional;
 
+import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
@@ -20,6 +21,12 @@ import net.minecraft.util.math.BlockPos;
 
 public class ForesterBrain extends WorkerBrain {
     // Implement Forester-specific behavior here
+
+    public ForesterBrain() {
+        this.WANTED_ITEMS = ImmutableSet.of(
+            ItemTags.SAPLINGS
+        );
+    }
 
     @Override
     protected void handleJob(

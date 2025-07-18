@@ -12,36 +12,29 @@ import net.minecraft.village.VillagerData;
 import net.minecraft.village.VillagerProfession;
 import net.minecraft.registry.RegistryKey;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mcsettlers.brains.ForesterBrain;
 import com.mcsettlers.brains.WoodcutterBrain;
 import com.mcsettlers.brains.WorkerBrain;
+import com.mcsettlers.brains.CarrierBrain;
 
 public class MCSettlers implements ModInitializer {
 	public static final String MOD_ID = "mcsettlers";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	private static final Map<UUID, WorkerBrain> villagerBrains = new HashMap<>();
+	private static final WorkerBrain woodcutterBrain = new WoodcutterBrain();
+	private static final WorkerBrain foresterBrain = new ForesterBrain();
+	private static final WorkerBrain carrierBrain = new CarrierBrain();
 
-	public static WorkerBrain getBrainFor(VillagerEntity villager) {
-		return villagerBrains.computeIfAbsent(
-			villager.getUuid(),
-			uuid -> {
-				// Choose correct brain type based on profession
-				if (villager.getVillagerData().profession().matchesKey(ModProfessions.WOODCUTTER)) {
-					return new WoodcutterBrain();
-				} else if (villager.getVillagerData().profession().matchesKey(ModProfessions.FORESTER)) {
-					return new ForesterBrain();
-				}
-				return null;
-			}
-		);
+	public static WorkerBrain getBrainFor(RegistryEntry<VillagerProfession> profession) {
+		if (profession.matchesKey(ModProfessions.WOODCUTTER)) {
+			return woodcutterBrain;
+		} else if (profession.matchesKey(ModProfessions.FORESTER)) {
+			return foresterBrain;
+		}
+		return carrierBrain;
 	}
 
 	@Override
@@ -76,11 +69,9 @@ public class MCSettlers implements ModInitializer {
 							}
 						}
 					}
-					if (profession != null) {
-						WorkerBrain brain = getBrainFor(villager);
-						if (brain != null) {
-							brain.tick(villager, world); // Calls the appropriate brain's tick method
-						}
+					WorkerBrain brain = getBrainFor(profession);
+					if (brain != null) {
+						brain.tick(villager, world); // Calls the appropriate brain's tick method
 					}
 				}
 			}

@@ -8,6 +8,7 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -28,6 +29,9 @@ public class WoodcutterBrain extends WorkerBrain {
             "breaking",
             "pillaring",
             "stopping_pillaring"
+        );
+        this.WANTED_ITEMS = ImmutableSet.of(
+            ItemTags.AXES
         );
     }
 
