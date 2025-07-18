@@ -2,7 +2,6 @@ package com.mcsettlers;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
@@ -17,8 +16,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.event.GameEvent;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableList;
+import com.mcsettlers.utils.ChestAnimationHelper;
 import com.mcsettlers.utils.RadiusGenerator;
 
 public class WoodcutterBrain {
@@ -143,6 +141,8 @@ public class WoodcutterBrain {
             keepPickingUpBlocks(villager, world, brain, workstation);
         } else if (jobStatus == "deposit_items") {
             keepDepositingItems(villager, world, brain, workstation);
+        } else if (jobStatus == "stop_deposit_items") {
+            stopDepositingItems(villager, world, brain, workstation);
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
@@ -400,7 +400,9 @@ public class WoodcutterBrain {
         if (villager.squaredDistanceTo(Vec3d.ofCenter(pos)) < 2.0) {
             BlockEntity chest = world.getBlockEntity(pos);
             if (chest instanceof net.minecraft.block.entity.ChestBlockEntity chestEntity) {
-                world.emitGameEvent(null, GameEvent.CONTAINER_OPEN, pos);
+                // To open the chest
+                ChestAnimationHelper.animateChest(world, pos, true);
+
                 for (int i = 0; i < villager.getInventory().size(); i++) {
                     net.minecraft.item.ItemStack stack = villager.getInventory().getStack(i);
                     if (stack.isEmpty()) continue;
@@ -416,7 +418,11 @@ public class WoodcutterBrain {
                 getBestToolFromChest(chestEntity, villager);
             }
 
-            setJobStatus(brain, villager, "picking_up_blocks");
+            setJobStatus(brain, villager, "stop_deposit_items");
+
+            // Turn head towards the chest
+            lookAtBlock(villager, pos);
+
             pauseForMS(world, brain, 1000); // Pause for 1 second after depositing
             return;
         }
@@ -429,6 +435,20 @@ public class WoodcutterBrain {
                 ));
         MCSettlers.LOGGER.info("[WoodcutterBrain] Villager {} walking to deposit items at {}", villager.getUuidAsString(), pos);
 
+    }
+
+    private static void stopDepositingItems(
+            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+
+        // Close the chest
+        Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+        if (chestPos.isPresent()) {
+            BlockPos pos = chestPos.get();
+            ChestAnimationHelper.animateChest(world, pos, false);
+        }
+
+        // Set job status to idle
+        setJobStatus(brain, villager, "picking_up_blocks");
     }
 
     private static void startBreakingBlock(
