@@ -13,7 +13,7 @@ import com.mcsettlers.utils.ChestAnimationHelper;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
-import net.minecraft.entity.ai.brain.MemoryModuleType;
+
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -34,23 +34,25 @@ public class CarrierBrain extends WorkerBrain {
     
     @Override
     protected void handleJob(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain,
-        String jobStatus, BlockPos workstation, BlockPos targetBlock, BlockPos walkTarget) {
+        VillagerEntity villager, ServerWorld world,
+        String jobStatus, BlockPos workstation, BlockPos targetBlock) {
+
+        Brain<?> brain = villager.getBrain();
 
         if (jobStatus == "walking_to_pick_up") {
-            if (walkTarget != null) {
+            if (!reallyReachedTarget(villager)) {
                 return; // Already walking, nothing to do
             }
-            startPickingUpItem(villager, world, brain, targetBlock);
+            startPickingUpItem(villager, world, targetBlock);
         } else if (jobStatus == "stop_picking_up_item") {
-            stopPickingUpItem(villager, world, brain, targetBlock);
+            stopPickingUpItem(villager, world, targetBlock);
         } else if (jobStatus == "deposit_items") {
-            keepDepositingItems(villager, world, brain, workstation);
+            keepDepositingItems(villager, world, workstation);
         } else if (jobStatus == "stop_deposit_items") {
-            stopDepositingItems(villager, world, brain, workstation);
+            stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(brain, villager, "no_work");
+                setJobStatus(villager, "no_work");
             }
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
@@ -61,11 +63,11 @@ public class CarrierBrain extends WorkerBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                setJobStatus(brain, villager, "idle");
+                setJobStatus(villager, "idle");
             }
         } else if (jobStatus == "idle") {
             // If inventory is empty, deposit items
-            findNewCarryJob(villager, world, brain);
+            findNewCarryJob(villager, world);
         }
     }
 
@@ -75,10 +77,10 @@ public class CarrierBrain extends WorkerBrain {
     }
 
     protected void findNewCarryJob(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain) {
+        VillagerEntity villager, ServerWorld world) {
         // Logic to find a new carry job, e.g., looking for items to pick up or chests to deposit into
         // This is a placeholder; actual implementation would depend on game logic
-        setJobStatus(brain, villager, "deposit_items");
+        setJobStatus(villager, "deposit_items");
         // Deposit chest is where the villager will deposit items
         // Target break block is the chest to get item from
 
@@ -131,6 +133,7 @@ public class CarrierBrain extends WorkerBrain {
             }
         }
 
+        Brain<?> brain = villager.getBrain();
         MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", queue.size(), villager.getUuid());
         // Print values for each deposit chest
         for (DepositChestValues chestValuesFrom : queue) {
@@ -160,13 +163,8 @@ public class CarrierBrain extends WorkerBrain {
                     brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestValuesTo.pos);
                     brain.remember(ModMemoryModules.ITEM_TO_CARRY, itemToCarry);
                     // Set walk target with reasonable completion range and duration
-                    brain.remember(MemoryModuleType.WALK_TARGET,
-                            new net.minecraft.entity.ai.brain.WalkTarget(
-                                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(chestValuesFrom.pos),
-                                    0.6F,
-                                    1 // completion range
-                            ));
-                    setJobStatus(brain, villager, "walking_to_pick_up");
+                    walkToPosition(villager, world, chestValuesFrom.pos, 0.6F);
+                    setJobStatus(villager, "walking_to_pick_up");
                     return;
                 }
             }
@@ -174,7 +172,7 @@ public class CarrierBrain extends WorkerBrain {
     }
 
     protected void startPickingUpItem(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain,
+        VillagerEntity villager, ServerWorld world,
         BlockPos targetBlock) {
             BlockEntity blockEntity = world.getBlockEntity(targetBlock);
             if (!(blockEntity instanceof ChestBlockEntity)) {
@@ -188,7 +186,7 @@ public class CarrierBrain extends WorkerBrain {
             }
 
             // Find itemstack to carry
-            Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+            Item itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
             if (itemToCarry == null) {
                 MCSettlers.LOGGER.warn("No item to carry found for villager: {}", villager.getUuid());
@@ -207,32 +205,49 @@ public class CarrierBrain extends WorkerBrain {
                     carriedStack.setCount(1); // Take only one item
                     villager.getInventory().addStack(carriedStack);
                     // Show item in hand
-                    villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, carriedStack);
                     chest.removeStack(i, 1); // Remove one item from chest
                     break;
                 }
             }
 
-            setJobStatus(brain, villager, "stop_picking_up_item");
-            pauseForMS(world, brain, 1000);
+            setJobStatus(villager, "stop_picking_up_item");
+            pauseForMS(villager, world, 1000);
     }
 
+    protected void stopDepositingItems(
+        VillagerEntity villager, ServerWorld world,
+        BlockPos workstation) {
+            super.stopDepositingItems(villager, world, workstation);
+            // Stop holding item in hand
+            startHoldingItem(villager, ItemStack.EMPTY);
+            setJobStatus(villager, "no_work");
+        }
+
     protected void stopPickingUpItem(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain,
+        VillagerEntity villager, ServerWorld world,
         BlockPos targetBlock) {
+            Brain <?> brain = villager.getBrain();
             // Logic to stop picking up item, e.g., resetting hand and chest animation
             ChestAnimationHelper.animateChest(world, targetBlock, false);
-            setJobStatus(brain, villager, "deposit_items");
+            setJobStatus(villager, "deposit_items");
+            Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+                .orElse(null);
+
+            if (itemToCarry != null) {
+                for (int i = 0; i < villager.getInventory().size(); i++) {
+                    ItemStack stack = villager.getInventory().getStack(i);
+                    if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
+                        startHoldingItem(villager, stack);
+                        break; // Found the item to carry, set it in hand
+                    }
+                }
+            }
+
             // Set walk target to deposit chest
             BlockPos depositChest = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST)
                 .orElse(null);
             if (depositChest != null) {
-                brain.remember(MemoryModuleType.WALK_TARGET,
-                        new net.minecraft.entity.ai.brain.WalkTarget(
-                                new net.minecraft.entity.ai.brain.BlockPosLookTarget(depositChest),
-                                0.6F,
-                                1 // completion range
-                        ));
+                walkToPosition(villager, world, depositChest, 0.6F);
             } else {
                 MCSettlers.LOGGER.warn("No deposit chest found for villager: {}", villager.getUuid());
             }

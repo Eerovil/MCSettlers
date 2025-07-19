@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
@@ -38,6 +39,32 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Item> ITEM_TO_CARRY =
         new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<BlockPos> JOB_WALK_TARGET =
+        new MemoryModuleType<>(Optional.empty());
+
+    public static final MemoryModuleType<Integer> JOB_WALK_FAILURE_COUNT =
+        new MemoryModuleType<>(Optional.empty());
+
+    public static final MemoryModuleType<ItemStack> ITEM_IN_HAND =
+        new MemoryModuleType<>(Optional.empty());
+
+    public static List<MemoryModuleType<?>> getAllMemoryModules() {
+        return List.of(
+            JOB_STATUS,
+            TARGET_BREAK_BLOCK,
+            BREAK_PROGRESS,
+            NO_WORK_UNTIL_TICK,
+            PILLAR_BLOCKS,
+            KEEP_PILLARING,
+            DEPOSIT_CHEST,
+            PAUSE_EVERYTHING_UNTIL,
+            ITEM_TO_CARRY,
+            JOB_WALK_TARGET,
+            JOB_WALK_FAILURE_COUNT,
+            ITEM_IN_HAND
+        );
+    }
+
     public static void register() {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "job_status"),
@@ -66,5 +93,14 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
             Identifier.of("mcsettlers", "item_to_carry"),
             ITEM_TO_CARRY);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "job_walk_target"),
+            JOB_WALK_TARGET);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "item_in_hand"),
+            ITEM_IN_HAND);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+            Identifier.of("mcsettlers", "job_walk_failure_count"),
+            JOB_WALK_FAILURE_COUNT);
     }
 }

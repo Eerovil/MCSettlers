@@ -20,6 +20,7 @@ import net.minecraft.entity.ai.brain.WalkTarget;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -43,7 +44,7 @@ public class WorkerBrain {
         if (optionalJobStatus == null) {
             MCSettlers.LOGGER.warn("[WorkerBrain] Villager " + villager.getUuidAsString()
                     + " has no job status memory, setting to idle.");
-            setJobStatus(brain, villager, "idle");
+            setJobStatus(villager, "idle");
             return;
         }
 
@@ -51,7 +52,7 @@ public class WorkerBrain {
 
         if (jobStatus == null || jobStatus.isEmpty() || jobStatus.equals("unknown")) {
             // If job status is unknown, set it to idle
-            setJobStatus(brain, villager, "idle");
+            setJobStatus(villager, "idle");
             jobStatus = "idle"; // Update local variable to avoid repeated lookups
         }
 
@@ -80,7 +81,73 @@ public class WorkerBrain {
                 .map(GlobalPos::pos)
                 .orElse(null);
         Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
-        BlockPos targetLog = optionalTarget != null ? optionalTarget.orElse(null) : null;
+        BlockPos targetBlock = optionalTarget != null ? optionalTarget.orElse(null) : null;
+
+        if (workstation == null) {
+            if (!(this instanceof CarrierBrain)) {
+                return;
+            }
+        }
+
+        keepHoldingItemInHand(villager);
+
+        // if (dance(villager, world, workstation)) {
+        //     return;
+        // }
+
+        handleJob(villager, world, jobStatus, workstation, targetBlock);
+
+        long tickEnd = System.nanoTime();
+        if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
+            MCSettlers.LOGGER.info("[WorkerBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
+        }
+    }
+
+    protected void startHoldingItem(
+        VillagerEntity villager, ItemStack itemStack) {
+        villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, itemStack);
+        villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, itemStack);
+        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} is now holding item: {}", villager.getUuidAsString(), itemStack);
+    }
+
+    protected void startHoldingItem(
+        VillagerEntity villager, Item item) {
+        if (item == null) {
+            // If item is null, choose item air
+            item = Items.AIR; // Default to air if no item is provided
+        }
+        ItemStack itemStack = new ItemStack(item);
+        startHoldingItem(villager, itemStack);
+    }
+
+    protected boolean keepHoldingItemInHand(
+        VillagerEntity villager) {
+        // Check memory for item in hand
+        Optional<ItemStack> optionalItemInHand = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_IN_HAND);
+        if (optionalItemInHand.isPresent() && !optionalItemInHand.get().isEmpty()) {
+            ItemStack itemInHand = optionalItemInHand.get();
+            // Check if the villager is already holding the item
+            if (villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND).isOf(itemInHand.getItem())) {
+                return true; // Already holding the item, nothing to do
+            }
+            // If not holding the item, set it in the main hand
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, itemInHand);
+            MCSettlers.LOGGER.info("[WorkerBrain] Villager {} is now holding item: {}", villager.getUuidAsString(), itemInHand);
+            return true;
+        }
+        // No item in hand memory, make sure the villager is not holding anything
+        // If they are
+        if (!villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND).isEmpty()) {
+            MCSettlers.LOGGER.info("[WorkerBrain] Villager {} is clearing their hand.", villager.getUuidAsString());
+            // Clear the hand
+            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
+        }
+        return false;
+    }
+
+    protected boolean reallyReachedTarget(
+        VillagerEntity villager) {
+            Brain<?> brain = villager.getBrain();
         Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
         BlockPos walkTarget = null;
         if (optionalWalkTarget.isPresent()) {
@@ -89,48 +156,87 @@ public class WorkerBrain {
                 walkTarget = wt.getLookTarget().getBlockPos();
             }
         }
-
-        if (workstation == null) {
-            if (!(this instanceof CarrierBrain)) {
-                return;
+        if (walkTarget != null) {
+            return false;
+        }
+        // Call this after worker stopped walking. It will start another job and return
+        // false, if not reached.
+        Optional<BlockPos> jobWalkTarget = brain.getOptionalMemory(ModMemoryModules.JOB_WALK_TARGET);
+        if (jobWalkTarget.isEmpty()) {
+            return false;  // ... reached?
+        }
+        BlockPos target = jobWalkTarget.get();
+        if (villager.squaredDistanceTo(Vec3d.ofCenter(target)) < 2.0) {
+            // Reached the target
+            // Forget the job walk target
+            brain.forget(ModMemoryModules.JOB_WALK_TARGET);
+            return true;
+        }
+        // Not reached yet. Let's check if we have failed too many times
+        Optional<Integer> optionalFailureCount = brain.getOptionalMemory(ModMemoryModules.JOB_WALK_FAILURE_COUNT);
+        if (optionalFailureCount.isPresent()) {
+            int failureCount = optionalFailureCount.get();
+            if (failureCount >= 3) {
+                // Too many failures, give up
+                brain.forget(ModMemoryModules.JOB_WALK_TARGET);
+                // Set job status to no_work
+                setJobStatus(villager, "no_work");
+                MCSettlers.LOGGER.info("[WorkerBrain] Villager {} failed to reach target {} ({} times), giving up.",
+                        villager.getUuidAsString(), target.toShortString(), failureCount);
+                return false;
             }
         }
+        // Add or increment the failure count
+        int newFailureCount = optionalFailureCount.orElse(0) + 1;
+        brain.remember(ModMemoryModules.JOB_WALK_FAILURE_COUNT, newFailureCount);
+        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} failed to reach target {} ({} times)",
+                villager.getUuidAsString(), target.toShortString(), newFailureCount);
+        // Try to walk to the target
+        brain.remember(MemoryModuleType.WALK_TARGET,
+            new net.minecraft.entity.ai.brain.WalkTarget(
+                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(target),
+                    0.6F,
+                    2
+            ));
+        return false;
+    }
 
-        // if (dance(villager, world, brain, workstation)) {
-        //     return;
-        // }
-
-        handleJob(villager, world, brain, jobStatus, workstation, targetLog, walkTarget);
-
-        long tickEnd = System.nanoTime();
-        if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
-            MCSettlers.LOGGER.info("[WorkerBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
-        }
+    protected void walkToPosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
+        Brain<?> brain = villager.getBrain();
+        brain.remember(MemoryModuleType.WALK_TARGET,
+            new net.minecraft.entity.ai.brain.WalkTarget(
+                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos),
+                    speed,
+                    2
+            ));
+        
+        brain.remember(ModMemoryModules.JOB_WALK_TARGET, pos);
+        brain.forget(ModMemoryModules.JOB_WALK_FAILURE_COUNT); // Reset failure count
     }
 
     protected void handleJob(
-            VillagerEntity villager, ServerWorld world, Brain<?> brain,
-            String jobStatus, BlockPos workstation, BlockPos targetLog, BlockPos walkTarget) {
+            VillagerEntity villager, ServerWorld world,
+            String jobStatus, BlockPos workstation, BlockPos targetLog) {
 
         if (jobStatus == "walking") {
             return;
         } else if (jobStatus == "picking_up_blocks") {
-            keepPickingUpBlocks(villager, world, brain, workstation);
+            keepPickingUpBlocks(villager, world, workstation);
         } else if (jobStatus == "deposit_items") {
-            keepDepositingItems(villager, world, brain, workstation);
+            keepDepositingItems(villager, world, workstation);
         } else if (jobStatus == "stop_deposit_items") {
-            stopDepositingItems(villager, world, brain, workstation);
+            stopDepositingItems(villager, world, workstation);
         }
     }
 
-    protected void pauseForMS(ServerWorld world, Brain<?> brain, long duration) {
+    protected void pauseForMS(VillagerEntity villager, ServerWorld world, long duration) {
         int pauseDuration = (int) (duration / 50); // Convert ms to ticks (20 ticks = 1 second)
         long pauseUntil = world.getTime() + pauseDuration;
-        brain.remember(ModMemoryModules.PAUSE_EVERYTHING_UNTIL, pauseUntil);
+        villager.getBrain().remember(ModMemoryModules.PAUSE_EVERYTHING_UNTIL, pauseUntil);
     }
 
-    protected void setJobStatus(Brain<?> brain, VillagerEntity villager, String status) {
-        brain.remember(ModMemoryModules.JOB_STATUS, status);
+    protected void setJobStatus(VillagerEntity villager, String status) {
+        villager.getBrain().remember(ModMemoryModules.JOB_STATUS, status);
         villager.setCustomName(net.minecraft.text.Text.of(status));
         villager.setCustomNameVisible(true);
         MCSettlers.LOGGER.info("[WorkerBrain] Set job status to " + status + " for villager "
@@ -194,7 +300,7 @@ public class WorkerBrain {
             // Remove the axe from the chest
             chest.setStack(bestToolIndex, net.minecraft.item.ItemStack.EMPTY);
             villager.getInventory().addStack(bestAxe);
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, bestAxe);
+            startHoldingItem(villager, bestAxe);
         }
     }
 
@@ -230,37 +336,37 @@ public class WorkerBrain {
             }
 
     protected void stopDepositingItems(
-            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
         // Close the chest
-        Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+        Optional<BlockPos> chestPos = villager.getBrain().getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
         if (chestPos.isPresent()) {
             BlockPos pos = chestPos.get();
             ChestAnimationHelper.animateChest(world, pos, false);
         }
 
         // Set job status to idle
-        setJobStatus(brain, villager, "picking_up_blocks");
+        setJobStatus(villager, "picking_up_blocks");
     }
 
     protected void keepDepositingItems(
-            VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
-        // If currently walking, return;
-        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
-        if (optionalWalkTarget.isPresent()) {
+        Brain<?> brain = villager.getBrain();
+
+        if (!reallyReachedTarget(villager)) {
             return;
         }
 
         // Find a chest to deposit items
         Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
-        if (chestPos.isEmpty()) {
+        if (chestPos.isEmpty() || !world.getBlockState(chestPos.get()).isOf(Blocks.CHEST)) {
             chestPos = findDepositChest(world, workstation);
             if (chestPos.isPresent()) {
                 brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
             } else {
                 MCSettlers.LOGGER.info("[WorkerBrain] No nearby chest found for villager " + villager.getUuidAsString());
-                setJobStatus(brain, villager, "no_work");
+                setJobStatus(villager, "no_work");
                 return;
             }
         }
@@ -289,21 +395,17 @@ public class WorkerBrain {
                 getBestToolFromChest(chestEntity, villager);
             }
 
-            setJobStatus(brain, villager, "stop_deposit_items");
+            setJobStatus(villager, "stop_deposit_items");
 
             // Turn head towards the chest
             lookAtBlock(villager, pos);
 
-            pauseForMS(world, brain, 1000); // Pause for 1 second after depositing
+            pauseForMS(villager, world, 1000); // Pause for 1 second after depositing
             return;
         }
 
-        brain.remember(MemoryModuleType.WALK_TARGET,
-                new net.minecraft.entity.ai.brain.WalkTarget(
-                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos),
-                        0.6F,
-                        1
-                ));
+        walkToPosition(villager, world, pos, 0.6F);
+
         MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to deposit items at {}", villager.getUuidAsString(), pos);
 
     }
@@ -330,10 +432,10 @@ public class WorkerBrain {
     }
 
     protected void keepPickingUpBlocks(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation) {
+        VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
         // If currently walking, return;
-        Optional<WalkTarget> optionalWalkTarget = brain.getOptionalMemory(MemoryModuleType.WALK_TARGET);
+        Optional<WalkTarget> optionalWalkTarget = villager.getBrain().getOptionalMemory(MemoryModuleType.WALK_TARGET);
         if (optionalWalkTarget.isPresent()) {
             return;
         }
@@ -354,13 +456,7 @@ public class WorkerBrain {
                     if (!items.isEmpty()) {
                         net.minecraft.entity.ItemEntity targetItem = items.get(0);
                         BlockPos itemPos = targetItem.getBlockPos();
-                        brain.remember(MemoryModuleType.WALK_TARGET,
-                            new WalkTarget(
-                                new net.minecraft.entity.ai.brain.BlockPosLookTarget(itemPos),
-                                0.6F,
-                                1
-                            )
-                        );
+                        walkToPosition(villager, world, itemPos, 0.6F);
                         MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to gatherable item {} at {}", villager.getUuidAsString(), targetItem.getStack().getItem(), itemPos);
                         return;
                     }
@@ -369,7 +465,7 @@ public class WorkerBrain {
         }
         MCSettlers.LOGGER.info("[WorkerBrain] No gatherable items found in radius " + searchRadius + " around " + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
         // If no item found, set job status to idle
-        setJobStatus(brain, villager, "idle");
+        setJobStatus(villager, "idle");
     }
 
     protected int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
@@ -407,8 +503,8 @@ public class WorkerBrain {
             float miningSpeed = stack.getMiningSpeedMultiplier(targetBlockState);
             if (miningSpeed <= 1.0f) continue; // Not a tool or not effective
             // Set the villager's main hand to the tool
-            villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, stack);
-            villager.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            startHoldingItem(villager, stack);
+
             MCSettlers.LOGGER.info("[WorkerBrain] Villager " + villager.getUuidAsString()
                     + " selected tool from inventory: " + stack.getName().getString());
             return; // Tool found and set, exit the loop

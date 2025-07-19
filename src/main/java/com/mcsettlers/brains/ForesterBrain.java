@@ -10,7 +10,7 @@ import com.mcsettlers.utils.RadiusGenerator;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
-import net.minecraft.entity.ai.brain.MemoryModuleType;
+
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -30,23 +30,25 @@ public class ForesterBrain extends WorkerBrain {
 
     @Override
     protected void handleJob(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain,
-        String jobStatus, BlockPos workstation, BlockPos targetLog, BlockPos walkTarget) {
+        VillagerEntity villager, ServerWorld world,
+        String jobStatus, BlockPos workstation, BlockPos targetLog) {
 
-        if (jobStatus == "walking") {
-            if (walkTarget != null) {
-                return; // Already walking, nothing to do
+        Brain<?> brain = villager.getBrain();
+
+        if (jobStatus == "walking_to_plant") {
+            if (!reallyReachedTarget(villager)) {
+                return;
             }
-            startPlanting(villager, world, brain, workstation, targetLog);
+            startPlanting(villager, world, workstation, targetLog);
         } else if (jobStatus == "picking_up_blocks") {
-            keepPickingUpBlocks(villager, world, brain, workstation);
+            keepPickingUpBlocks(villager, world, workstation);
         } else if (jobStatus == "deposit_items") {
-            keepDepositingItems(villager, world, brain, workstation);
+            keepDepositingItems(villager, world, workstation);
         } else if (jobStatus == "stop_deposit_items") {
-            stopDepositingItems(villager, world, brain, workstation);
+            stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(brain, villager, "no_work");
+                setJobStatus(villager, "no_work");
             }
         } else if (jobStatus == "no_work") {
             // Set timer for 10 seconds and make the villager idle
@@ -57,24 +59,24 @@ public class ForesterBrain extends WorkerBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                setJobStatus(brain, villager, "deposit_items");
+                setJobStatus(villager, "deposit_items");
             }
         } else if (jobStatus == "planting") {
             lookAtBlock(villager, targetLog);
-            setJobStatus(brain, villager, "idle");
-            pauseForMS(world, brain, 1000);
+            setJobStatus(villager, "idle");
+            pauseForMS(villager, world, 1000);
         } else if (jobStatus == "idle") {
             // If inventory is empty, deposit items
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(brain, villager, "deposit_items");
+                setJobStatus(villager, "deposit_items");
             } else {
-                findNewPlantingTarget(villager, world, brain, workstation);
+                findNewPlantingTarget(villager, world, workstation);
             }
         }
     }
 
     protected void findNewPlantingTarget(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain, BlockPos workstation)
+        VillagerEntity villager, ServerWorld world, BlockPos workstation)
     {
         MCSettlers.LOGGER.info("Finding new planting target for villager: {}", villager.getUuid());
         int r2 = 15 * 15;
@@ -101,22 +103,19 @@ public class ForesterBrain extends WorkerBrain {
             }
             return false;
         });
+        Brain <?> brain = villager.getBrain();
         for (BlockPos pos : villagerRadiusCoords) {
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, pos.up());
 
-            // Set walk target with reasonable completion range and duration
-            brain.remember(MemoryModuleType.WALK_TARGET,
-                    new net.minecraft.entity.ai.brain.WalkTarget(
-                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(pos.up()),
-                            0.6F,
-                            1 // completion range
-                    ));
-
-            setJobStatus(brain, villager, "walking");
+            // Walk to the position above the dirt block
+            walkToPosition(villager, world, pos.up(), 0.6F);
+            // Set the job status to walking, forester knows
+            // that after this job is done, it will start planting
+            setJobStatus(villager, "walking_to_plant");
             return;
         }
 
-        setJobStatus(brain, villager, "no_work");
+        setJobStatus(villager, "no_work");
         MCSettlers.LOGGER.info("No suitable planting target found for villager: {}", villager.getUuid());
     }
 
@@ -129,6 +128,7 @@ public class ForesterBrain extends WorkerBrain {
                 ItemStack saplingStack = stack.copy();
                 saplingStack.setCount(1);
                 villager.getInventory().removeStack(i, 1);
+                startHoldingItem(villager, ItemStack.EMPTY); // Clear the held item
                 return saplingStack;
             }
         }
@@ -136,11 +136,10 @@ public class ForesterBrain extends WorkerBrain {
     }
 
     protected void startPlanting(
-        VillagerEntity villager, ServerWorld world, Brain<?> brain,
-        BlockPos workstation, BlockPos targetLog) {
+        VillagerEntity villager, ServerWorld world, BlockPos workstation, BlockPos targetLog) {
         // Logic to start planting trees
         // This is a placeholder; actual implementation would depend on game logic
-        setJobStatus(brain, villager, "planting");
+        setJobStatus(villager, "planting");
 
         MCSettlers.LOGGER.info("Villager {} is starting to plant trees at {}", villager.getUuid(), targetLog);
 
@@ -171,6 +170,7 @@ public class ForesterBrain extends WorkerBrain {
                 saplingStack.setCount(1);
                 chest.removeStack(i, 1);
                 villager.getInventory().addStack(saplingStack);
+                startHoldingItem(villager, saplingStack);
                 return;
             }
         }
