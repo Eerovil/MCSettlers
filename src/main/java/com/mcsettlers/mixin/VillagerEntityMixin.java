@@ -36,11 +36,10 @@ public class VillagerEntityMixin {
         if (data.profession() == VillagerProfession.FLETCHER) {
             int rawId = Registries.VILLAGER_PROFESSION.getRawId(data.profession().value());
             RegistryEntry<VillagerProfession> profession = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
-            ((VillagerEntity)(Object)this).setVillagerData(new VillagerData(
-                data.type(),
-                profession,
-                data.level()
-            ));
+            ((VillagerEntity) (Object) this).setVillagerData(new VillagerData(
+                    data.type(),
+                    profession,
+                    data.level()));
             ci.cancel();
         }
     }

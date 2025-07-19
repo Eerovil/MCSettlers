@@ -24,14 +24,13 @@ public class ForesterBrain extends WorkerBrain {
 
     public ForesterBrain() {
         this.WANTED_ITEMS = ImmutableSet.of(
-            ItemTags.SAPLINGS
-        );
+                ItemTags.SAPLINGS);
     }
 
     @Override
     protected void handleJob(
-        VillagerEntity villager, ServerWorld world,
-        String jobStatus, BlockPos workstation, BlockPos targetLog) {
+            VillagerEntity villager, ServerWorld world,
+            String jobStatus, BlockPos workstation, BlockPos targetLog) {
 
         Brain<?> brain = villager.getBrain();
 
@@ -76,8 +75,7 @@ public class ForesterBrain extends WorkerBrain {
     }
 
     protected void findNewPlantingTarget(
-        VillagerEntity villager, ServerWorld world, BlockPos workstation)
-    {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
         MCSettlers.LOGGER.info("Finding new planting target for villager: {}", villager.getUuid());
         int r2 = 15 * 15;
         // Logic to find a new planting target
@@ -103,7 +101,7 @@ public class ForesterBrain extends WorkerBrain {
             }
             return false;
         });
-        Brain <?> brain = villager.getBrain();
+        Brain<?> brain = villager.getBrain();
         for (BlockPos pos : villagerRadiusCoords) {
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, pos.up());
 
@@ -136,7 +134,7 @@ public class ForesterBrain extends WorkerBrain {
     }
 
     protected void startPlanting(
-        VillagerEntity villager, ServerWorld world, BlockPos workstation, BlockPos targetLog) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation, BlockPos targetLog) {
         // Logic to start planting trees
         // This is a placeholder; actual implementation would depend on game logic
         setJobStatus(villager, "planting");

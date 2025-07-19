@@ -26,13 +26,11 @@ public class WoodcutterBrain extends WorkerBrain {
     public WoodcutterBrain() {
         this.TARGET_BLOCK_STATE = Optional.of(Blocks.OAK_LOG.getDefaultState());
         this.NON_AI_JOBS = ImmutableSet.of(
-            "breaking",
-            "pillaring",
-            "stopping_pillaring"
-        );
+                "breaking",
+                "pillaring",
+                "stopping_pillaring");
         this.WANTED_ITEMS = ImmutableSet.of(
-            ItemTags.AXES
-        );
+                ItemTags.AXES);
     }
 
     // Raycast from villager to target block, return first log/leaf in the way
@@ -71,7 +69,7 @@ public class WoodcutterBrain extends WorkerBrain {
     protected void handleJob(
             VillagerEntity villager, ServerWorld world,
             String jobStatus, BlockPos workstation, BlockPos targetLog) {
-       
+
         Brain<?> brain = villager.getBrain();
 
         if (jobStatus == "walking") {
@@ -162,7 +160,8 @@ public class WoodcutterBrain extends WorkerBrain {
 
                 // If it's above the villager, we can pillar up
                 if (targetLog.getY() > villager.getBlockPos().getY() + 3) {
-                    int squaredZXDistance = (villager.getBlockPos().getX() - targetLog.getX()) * (villager.getBlockPos().getX() - targetLog.getX());
+                    int squaredZXDistance = (villager.getBlockPos().getX() - targetLog.getX())
+                            * (villager.getBlockPos().getX() - targetLog.getX());
                     if (squaredZXDistance < 5 * 5) {
                         System.out.println("[WoodcutterBrain] Villager " + villager.getUuidAsString()
                                 + " starting to pillar up to log at " + targetLog.toShortString());
@@ -225,7 +224,7 @@ public class WoodcutterBrain extends WorkerBrain {
             brain.forget(ModMemoryModules.BREAK_PROGRESS);
             // if pillaring, keep pillaring
             if (brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).isPresent()
-            && brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).get().size() > 0) {
+                    && brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).get().size() > 0) {
                 if (brain.getOptionalMemory(ModMemoryModules.KEEP_PILLARING).orElse(false)) {
                     setJobStatus(villager, "pillaring");
                 } else {
@@ -376,7 +375,8 @@ public class WoodcutterBrain extends WorkerBrain {
         }
 
         BlockPos villagerPos = villager.getBlockPos();
-        // Find log with y coordinate greater than villager's aand within radius 6 in X and Z
+        // Find log with y coordinate greater than villager's aand within radius 6 in X
+        // and Z
         Iterable<BlockPos> nearbyLogs = RadiusGenerator.radiusCoordinates(villagerPos, 3, pos -> {
             BlockState state = world.getBlockState(pos);
             return (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES))
@@ -408,14 +408,16 @@ public class WoodcutterBrain extends WorkerBrain {
         // If leaf block exists directly above the villager, use it as target
 
         // check if we should stop pillaring
-        // We find all log blocks within a radius of 5 blocks and ANY Y above the villager
+        // We find all log blocks within a radius of 5 blocks and ANY Y above the
+        // villager
         // If nothing found, stop pillaring
         boolean foundAnyLogAbove = false;
         for (int extraY = 0; extraY < 5; extraY++) {
-            Iterable<BlockPos> nearbyLogsWithExtraY = RadiusGenerator.radiusCoordinates(villagerPos.up(extraY), 4, pos -> {
-                BlockState state = world.getBlockState(pos);
-                return state.isIn(BlockTags.LOGS);
-            });
+            Iterable<BlockPos> nearbyLogsWithExtraY = RadiusGenerator.radiusCoordinates(villagerPos.up(extraY), 4,
+                    pos -> {
+                        BlockState state = world.getBlockState(pos);
+                        return state.isIn(BlockTags.LOGS);
+                    });
             if (nearbyLogsWithExtraY.iterator().hasNext()) {
                 foundAnyLogAbove = true;
                 break; // Found at least one log above, no need to continue
@@ -438,7 +440,7 @@ public class WoodcutterBrain extends WorkerBrain {
         if (world.getBlockState(dirtPos).isReplaceable()) {
             world.setBlockState(dirtPos, net.minecraft.block.Blocks.DIRT.getDefaultState());
             MCSettlers.LOGGER.info("[WoodcutterBrain] Placed dirt block at " + dirtPos.toShortString());
-            
+
             pillarBlocks.add(dirtPos); // Add the dirt block to the pillar blocks memory
             brain.remember(ModMemoryModules.PILLAR_BLOCKS, pillarBlocks);
 

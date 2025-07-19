@@ -20,10 +20,13 @@ import java.util.HashSet;
 import com.google.common.collect.ImmutableSet;
 
 public class ModProfessions {
-    public static final RegistryKey<VillagerProfession> WOODCUTTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.of("mcsettlers:woodcutter"));
-    public static final RegistryKey<VillagerProfession> FORESTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.of("mcsettlers:forester"));
+    public static final RegistryKey<VillagerProfession> WOODCUTTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION,
+            Identifier.of("mcsettlers:woodcutter"));
+    public static final RegistryKey<VillagerProfession> FORESTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION,
+            Identifier.of("mcsettlers:forester"));
 
-    // Maps vanilla profession keys to custom profession keys (e.g., FLETCHER -> WOODCUTTER)
+    // Maps vanilla profession keys to custom profession keys (e.g., FLETCHER ->
+    // WOODCUTTER)
     public static final Map<RegistryKey<VillagerProfession>, RegistryKey<VillagerProfession>> VANILLA_TO_CUSTOM_PROFESSION_MAP = new HashMap<>();
 
     public static void register() {
@@ -35,13 +38,11 @@ public class ModProfessions {
     // Register vanilla-to-custom profession mappings
     private static void registerProfessionMappings() {
         VANILLA_TO_CUSTOM_PROFESSION_MAP.put(
-            RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("fletcher")),
-            WOODCUTTER
-        );
+                RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("fletcher")),
+                WOODCUTTER);
         VANILLA_TO_CUSTOM_PROFESSION_MAP.put(
-            RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("cartographer")),
-            FORESTER
-        );
+                RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("cartographer")),
+                FORESTER);
         // Add more mappings as needed
     }
 
@@ -59,23 +60,21 @@ public class ModProfessions {
         Set<Block> secondaryJobSites = new HashSet<>();
 
         VillagerProfession forester = new VillagerProfession(
-            Text.translatable("entity." + FORESTER.getValue().getNamespace() + ".villager." + FORESTER.getValue().getPath()),
-            entry -> entry.matchesKey(PointOfInterestTypes.CARTOGRAPHER),
-            entry -> entry.matchesKey(PointOfInterestTypes.CARTOGRAPHER),
-            ImmutableSet.copyOf(gatherableItems),
-            ImmutableSet.copyOf(secondaryJobSites),
-            SoundEvents.ENTITY_VILLAGER_WORK_CARTOGRAPHER
-        );
+                Text.translatable(
+                        "entity." + FORESTER.getValue().getNamespace() + ".villager." + FORESTER.getValue().getPath()),
+                entry -> entry.matchesKey(PointOfInterestTypes.CARTOGRAPHER),
+                entry -> entry.matchesKey(PointOfInterestTypes.CARTOGRAPHER),
+                ImmutableSet.copyOf(gatherableItems),
+                ImmutableSet.copyOf(secondaryJobSites),
+                SoundEvents.ENTITY_VILLAGER_WORK_CARTOGRAPHER);
 
         Registry.register(
-            Registries.VILLAGER_PROFESSION,
-            FORESTER,
-            forester
-        );
+                Registries.VILLAGER_PROFESSION,
+                FORESTER,
+                forester);
 
         MCSettlers.LOGGER.info("Registered custom profession: {}", FORESTER.getValue().toString());
     }
-        
 
     private static void registerWoodcutter() {
 
@@ -116,19 +115,18 @@ public class ModProfessions {
         secondaryJobSites.add(Blocks.CHERRY_LOG);
 
         VillagerProfession woodcutter = new VillagerProfession(
-            Text.translatable("entity." + WOODCUTTER.getValue().getNamespace() + ".villager." + WOODCUTTER.getValue().getPath()),
-            entry -> entry.matchesKey(PointOfInterestTypes.FLETCHER),
-            entry -> entry.matchesKey(PointOfInterestTypes.FLETCHER),
-            ImmutableSet.copyOf(gatherableItems),
-            ImmutableSet.copyOf(secondaryJobSites),
-            SoundEvents.ENTITY_VILLAGER_WORK_FLETCHER
-        );
+                Text.translatable("entity." + WOODCUTTER.getValue().getNamespace() + ".villager."
+                        + WOODCUTTER.getValue().getPath()),
+                entry -> entry.matchesKey(PointOfInterestTypes.FLETCHER),
+                entry -> entry.matchesKey(PointOfInterestTypes.FLETCHER),
+                ImmutableSet.copyOf(gatherableItems),
+                ImmutableSet.copyOf(secondaryJobSites),
+                SoundEvents.ENTITY_VILLAGER_WORK_FLETCHER);
 
         Registry.register(
-            Registries.VILLAGER_PROFESSION,
-            WOODCUTTER,
-            woodcutter
-        );
+                Registries.VILLAGER_PROFESSION,
+                WOODCUTTER,
+                woodcutter);
 
         MCSettlers.LOGGER.info("Registered custom profession: {}", WOODCUTTER.getValue().toString());
     }

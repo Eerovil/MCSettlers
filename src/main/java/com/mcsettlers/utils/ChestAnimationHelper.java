@@ -19,8 +19,8 @@ public class ChestAnimationHelper {
      * does not directly support the BlockEventS2CPacket format in this version.
      *
      * @param world The world the chest is in. Must be a server world.
-     * @param pos The BlockPos of the chest.
-     * @param open True to open the chest, false to close.
+     * @param pos   The BlockPos of the chest.
+     * @param open  True to open the chest, false to close.
      */
     public static void animateChest(World world, BlockPos pos, boolean open) {
         // Ensure it's a server-side world.
@@ -53,10 +53,12 @@ public class ChestAnimationHelper {
         // Create the BlockEventS2CPacket
         BlockEventS2CPacket packet = new BlockEventS2CPacket(pos, block, actionType, actionData);
 
-        // Iterate through all players and send the packet to those in the same world and within a reasonable distance
+        // Iterate through all players and send the packet to those in the same world
+        // and within a reasonable distance
         // You can adjust the distance (e.g., 64 * 64 for 64 blocks squared distance)
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (player.getWorld() == world && player.getPos().squaredDistanceTo(pos.getX(), pos.getY(), pos.getZ()) < 64 * 64) {
+            if (player.getWorld() == world
+                    && player.getPos().squaredDistanceTo(pos.getX(), pos.getY(), pos.getZ()) < 64 * 64) {
                 player.networkHandler.sendPacket(packet);
             }
         }
@@ -64,23 +66,26 @@ public class ChestAnimationHelper {
         // Optionally, play the chest open/close sound
         // This is separate from the visual animation and should still be done
         if (open) {
-            world.playSound(null, pos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.5f, world.random.nextFloat() * 0.1f + 0.9f);
+            world.playSound(null, pos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.5f,
+                    world.random.nextFloat() * 0.1f + 0.9f);
         } else {
-            world.playSound(null, pos, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.5f, world.random.nextFloat() * 0.1f + 0.9f);
+            world.playSound(null, pos, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.5f,
+                    world.random.nextFloat() * 0.1f + 0.9f);
         }
     }
 
     // Example usage (e.g., from a command or a block tick)
     // Make sure to call this method from a server-side context.
     /*
-    public static void exampleCall(ServerWorld serverWorld, BlockPos chestLocation) {
-        // To open the chest
-        ChestAnimationHelper.animateChest(serverWorld, chestLocation, true);
-
-        // To close the chest after a delay (e.g., 5 seconds = 100 ticks)
-        serverWorld.getServer().getScheduler().scheduleDelayedTask(() -> {
-            ChestAnimationHelper.animateChest(serverWorld, chestLocation, false);
-        }, 100); // This is conceptual; your scheduler implementation might differ
-    }
-    */
+     * public static void exampleCall(ServerWorld serverWorld, BlockPos
+     * chestLocation) {
+     * // To open the chest
+     * ChestAnimationHelper.animateChest(serverWorld, chestLocation, true);
+     * 
+     * // To close the chest after a delay (e.g., 5 seconds = 100 ticks)
+     * serverWorld.getServer().getScheduler().scheduleDelayedTask(() -> {
+     * ChestAnimationHelper.animateChest(serverWorld, chestLocation, false);
+     * }, 100); // This is conceptual; your scheduler implementation might differ
+     * }
+     */
 }

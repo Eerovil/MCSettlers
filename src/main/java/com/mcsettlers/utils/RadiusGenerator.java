@@ -9,9 +9,11 @@ public class RadiusGenerator {
         return radiusCoordinates(center, radius, pos -> true);
     }
 
-    public static Iterable<BlockPos> radiusCoordinates(BlockPos center, int radius, java.util.function.Predicate<BlockPos> filter) {
+    public static Iterable<BlockPos> radiusCoordinates(BlockPos center, int radius,
+            java.util.function.Predicate<BlockPos> filter) {
         return () -> new Iterator<BlockPos>() {
-            private final PriorityQueue<BlockPos> queue = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getSquaredDistance(center)));
+            private final PriorityQueue<BlockPos> queue = new PriorityQueue<>(
+                    Comparator.comparingDouble(p -> p.getSquaredDistance(center)));
             private final Set<BlockPos> seen = new HashSet<>();
             private final int r = radius;
 

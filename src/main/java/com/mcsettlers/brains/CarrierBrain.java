@@ -31,11 +31,11 @@ class DepositChestValues {
 
 public class CarrierBrain extends WorkerBrain {
     // Carrier carries items from chest to another
-    
+
     @Override
     protected void handleJob(
-        VillagerEntity villager, ServerWorld world,
-        String jobStatus, BlockPos workstation, BlockPos targetBlock) {
+            VillagerEntity villager, ServerWorld world,
+            String jobStatus, BlockPos workstation, BlockPos targetBlock) {
 
         Brain<?> brain = villager.getBrain();
 
@@ -77,8 +77,9 @@ public class CarrierBrain extends WorkerBrain {
     }
 
     protected void findNewCarryJob(
-        VillagerEntity villager, ServerWorld world) {
-        // Logic to find a new carry job, e.g., looking for items to pick up or chests to deposit into
+            VillagerEntity villager, ServerWorld world) {
+        // Logic to find a new carry job, e.g., looking for items to pick up or chests
+        // to deposit into
         // This is a placeholder; actual implementation would depend on game logic
         setJobStatus(villager, "deposit_items");
         // Deposit chest is where the villager will deposit items
@@ -86,10 +87,12 @@ public class CarrierBrain extends WorkerBrain {
 
         BlockPos villagerPos = villager.getBlockPos();
 
-        PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(Comparator.comparingDouble(p -> p.pos.getSquaredDistance(villagerPos)));
+        PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(
+                Comparator.comparingDouble(p -> p.pos.getSquaredDistance(villagerPos)));
 
         // Get a list of all deposit chests for all villagers
-        for (VillagerEntity otherVillager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER, v -> true)) {
+        for (VillagerEntity otherVillager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER,
+                v -> true)) {
             Brain<?> otherVillagerBrain = otherVillager.getBrain();
             Optional<BlockPos> depositChest = otherVillagerBrain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
             if (depositChest.isPresent()) {
@@ -144,21 +147,22 @@ public class CarrierBrain extends WorkerBrain {
                 }
                 // If chest from has items that the chest to wants, set it as target break block
                 if (!chestValuesFrom.containedItems.isEmpty() &&
-                    !chestValuesTo.wantedItems.isEmpty()) {
-                        Item itemToCarry = null;
-                        for (Item item : chestValuesFrom.containedItems) {
-                            if (chestValuesTo.wantedItems.contains(item)) {
-                                itemToCarry = item;
-                                MCSettlers.LOGGER.info("Found item to carry: {} for villager: {}", itemToCarry, villager.getUuid());
-                                break; // Found an item to carry, no need to check further
-                            }
+                        !chestValuesTo.wantedItems.isEmpty()) {
+                    Item itemToCarry = null;
+                    for (Item item : chestValuesFrom.containedItems) {
+                        if (chestValuesTo.wantedItems.contains(item)) {
+                            itemToCarry = item;
+                            MCSettlers.LOGGER.info("Found item to carry: {} for villager: {}", itemToCarry,
+                                    villager.getUuid());
+                            break; // Found an item to carry, no need to check further
                         }
-                        // If no item to carry found, continue
-                        if (itemToCarry == null) {
-                            MCSettlers.LOGGER.info("No item to carry found for villager: {}", villager.getUuid());
-                            continue;
-                        }
-                    MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", villager.getUuid(), chestValuesTo.pos);
+                    }
+                    // If no item to carry found, continue
+                    if (itemToCarry == null) {
+                        continue;
+                    }
+                    MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", villager.getUuid(),
+                            chestValuesTo.pos);
                     brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, chestValuesFrom.pos);
                     brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestValuesTo.pos);
                     brain.remember(ModMemoryModules.ITEM_TO_CARRY, itemToCarry);
@@ -172,84 +176,84 @@ public class CarrierBrain extends WorkerBrain {
     }
 
     protected void startPickingUpItem(
-        VillagerEntity villager, ServerWorld world,
-        BlockPos targetBlock) {
-            BlockEntity blockEntity = world.getBlockEntity(targetBlock);
-            if (!(blockEntity instanceof ChestBlockEntity)) {
-                MCSettlers.LOGGER.warn("Target block is not a chest: {}", targetBlock);
-                return;
-            }
-            ChestBlockEntity chest = (ChestBlockEntity) world.getBlockEntity(targetBlock);
-            if (chest == null || chest.isEmpty()) {
-                MCSettlers.LOGGER.warn("Chest at {} is empty or does not exist.", targetBlock);
-                return;
-            }
+            VillagerEntity villager, ServerWorld world,
+            BlockPos targetBlock) {
+        BlockEntity blockEntity = world.getBlockEntity(targetBlock);
+        if (!(blockEntity instanceof ChestBlockEntity)) {
+            MCSettlers.LOGGER.warn("Target block is not a chest: {}", targetBlock);
+            return;
+        }
+        ChestBlockEntity chest = (ChestBlockEntity) world.getBlockEntity(targetBlock);
+        if (chest == null || chest.isEmpty()) {
+            MCSettlers.LOGGER.warn("Chest at {} is empty or does not exist.", targetBlock);
+            return;
+        }
 
-            // Find itemstack to carry
-            Item itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+        // Find itemstack to carry
+        Item itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
-            if (itemToCarry == null) {
-                MCSettlers.LOGGER.warn("No item to carry found for villager: {}", villager.getUuid());
-                return;
+        if (itemToCarry == null) {
+            MCSettlers.LOGGER.warn("No item to carry found for villager: {}", villager.getUuid());
+            return;
+        }
+
+        // Check if the chest contains the item to carry
+        lookAtBlock(villager, targetBlock);
+        ChestAnimationHelper.animateChest(world, targetBlock, true);
+
+        for (int i = 0; i < chest.size(); i++) {
+            ItemStack stack = chest.getStack(i);
+            if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
+                // Add one item to villager's inventory
+                ItemStack carriedStack = stack.copy();
+                carriedStack.setCount(1); // Take only one item
+                villager.getInventory().addStack(carriedStack);
+                // Show item in hand
+                chest.removeStack(i, 1); // Remove one item from chest
+                break;
             }
+        }
 
-            // Check if the chest contains the item to carry
-            lookAtBlock(villager, targetBlock);
-            ChestAnimationHelper.animateChest(world, targetBlock, true);
-
-            for (int i = 0; i < chest.size(); i++) {
-                ItemStack stack = chest.getStack(i);
-                if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
-                    // Add one item to villager's inventory
-                    ItemStack carriedStack = stack.copy();
-                    carriedStack.setCount(1); // Take only one item
-                    villager.getInventory().addStack(carriedStack);
-                    // Show item in hand
-                    chest.removeStack(i, 1); // Remove one item from chest
-                    break;
-                }
-            }
-
-            setJobStatus(villager, "stop_picking_up_item");
-            pauseForMS(villager, world, 1000);
+        setJobStatus(villager, "stop_picking_up_item");
+        pauseForMS(villager, world, 1000);
     }
 
     protected void stopDepositingItems(
-        VillagerEntity villager, ServerWorld world,
-        BlockPos workstation) {
-            super.stopDepositingItems(villager, world, workstation);
-            // Stop holding item in hand
-            startHoldingItem(villager, ItemStack.EMPTY);
-            setJobStatus(villager, "no_work");
-        }
+            VillagerEntity villager, ServerWorld world,
+            BlockPos workstation) {
+        super.stopDepositingItems(villager, world, workstation);
+        // Stop holding item in hand
+        startHoldingItem(villager, ItemStack.EMPTY);
+        setJobStatus(villager, "no_work");
+    }
 
     protected void stopPickingUpItem(
-        VillagerEntity villager, ServerWorld world,
-        BlockPos targetBlock) {
-            Brain <?> brain = villager.getBrain();
-            // Logic to stop picking up item, e.g., resetting hand and chest animation
-            ChestAnimationHelper.animateChest(world, targetBlock, false);
-            setJobStatus(villager, "deposit_items");
-            Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+            VillagerEntity villager, ServerWorld world,
+            BlockPos targetBlock) {
+        Brain<?> brain = villager.getBrain();
+        // Logic to stop picking up item, e.g., resetting hand and chest animation
+        ChestAnimationHelper.animateChest(world, targetBlock, false);
+        setJobStatus(villager, "deposit_items");
+        Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
 
-            if (itemToCarry != null) {
-                for (int i = 0; i < villager.getInventory().size(); i++) {
-                    ItemStack stack = villager.getInventory().getStack(i);
-                    if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
-                        startHoldingItem(villager, stack);
-                        break; // Found the item to carry, set it in hand
-                    }
+        if (itemToCarry != null) {
+            for (int i = 0; i < villager.getInventory().size(); i++) {
+                ItemStack stack = villager.getInventory().getStack(i);
+                if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
+                    startHoldingItem(villager, stack);
+                    break; // Found the item to carry, set it in hand
                 }
             }
+        }
 
-            // Set walk target to deposit chest
-            BlockPos depositChest = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST)
+        // Set walk target to deposit chest
+        BlockPos depositChest = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST)
                 .orElse(null);
-            if (depositChest != null) {
-                walkToPosition(villager, world, depositChest, 0.6F);
-            } else {
-                MCSettlers.LOGGER.warn("No deposit chest found for villager: {}", villager.getUuid());
-            }
+        if (depositChest != null) {
+            walkToPosition(villager, world, depositChest, 0.6F);
+        } else {
+            MCSettlers.LOGGER.warn("No deposit chest found for villager: {}", villager.getUuid());
+        }
     }
 }

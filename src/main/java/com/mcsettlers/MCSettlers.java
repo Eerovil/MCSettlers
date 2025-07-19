@@ -53,18 +53,21 @@ public class MCSettlers implements ModInitializer {
 
 					if (profession != null) {
 						RegistryKey<VillagerProfession> vanillaKey = profession.getKey().orElse(null);
-						RegistryKey<VillagerProfession> customKey = ModProfessions.VANILLA_TO_CUSTOM_PROFESSION_MAP.get(vanillaKey);
+						RegistryKey<VillagerProfession> customKey = ModProfessions.VANILLA_TO_CUSTOM_PROFESSION_MAP
+								.get(vanillaKey);
 						if (customKey != null) {
 							VillagerProfession customProfession = Registries.VILLAGER_PROFESSION.get(customKey);
 							if (customProfession != null) {
 								int rawId = Registries.VILLAGER_PROFESSION.getRawId(customProfession);
-								RegistryEntry<VillagerProfession> customEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
+								RegistryEntry<VillagerProfession> customEntry = Registries.VILLAGER_PROFESSION
+										.getEntry(rawId).orElse(null);
 								if (customEntry != null) {
 									villager.setVillagerData(new VillagerData(
 											data.type(),
 											customEntry,
 											data.level()));
-									LOGGER.info("Changed villager profession to custom: {} -> {}", villager.getUuid(), customKey.getValue());
+									LOGGER.info("Changed villager profession to custom: {} -> {}", villager.getUuid(),
+											customKey.getValue());
 								}
 							}
 						}
@@ -85,7 +88,8 @@ public class MCSettlers implements ModInitializer {
 						VillagerProfession woodcutter = Registries.VILLAGER_PROFESSION.get(ModProfessions.WOODCUTTER);
 						if (woodcutter != null) {
 							int rawId = Registries.VILLAGER_PROFESSION.getRawId(woodcutter);
-							RegistryEntry<VillagerProfession> woodcutterEntry = Registries.VILLAGER_PROFESSION.getEntry(rawId).orElse(null);
+							RegistryEntry<VillagerProfession> woodcutterEntry = Registries.VILLAGER_PROFESSION
+									.getEntry(rawId).orElse(null);
 							if (woodcutterEntry != null) {
 								villager.setVillagerData(new VillagerData(
 										data.type(),
