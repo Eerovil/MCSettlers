@@ -134,11 +134,18 @@ public class WoodcutterBrain extends WorkerBrain {
             MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + foundLog.toShortString()
                     + ", approach at " + foundApproach.toShortString());
             villager.getBrain().remember(ModMemoryModules.TARGET_BREAK_BLOCK, foundLog);
+            
             // Ensure approach is walkable (not inside block, on ground)
             BlockPos walkableApproach = foundApproach;
             while (!world.getBlockState(walkableApproach.down()).isSolidBlock(world, walkableApproach.down())
                     && walkableApproach.getY() > 0) {
                 walkableApproach = walkableApproach.down();
+            }
+            // If walk target is close enough, start breaking
+            double distSq = villager.squaredDistanceTo(Vec3d.ofCenter(walkableApproach));
+            if (distSq < 3 * 3) {
+                startBreakingBlock(villager, world, foundLog);
+                return;
             }
             walkToPosition(villager, world, walkableApproach, 0.6F);
 
@@ -276,10 +283,11 @@ public class WoodcutterBrain extends WorkerBrain {
     // Find the nearest log/leaf and its approach air block
     private BlockPos[] findNearbyLogAndApproach(
             ServerWorld world,
-            BlockPos villagerPos,
+            BlockPos villagerFeetPos,
             BlockPos workstation,
             int radius) {
         int r2 = radius * radius;
+        BlockPos villagerPos = villagerFeetPos.up();
         HashMap<BlockPos, Boolean> handledCoords = new HashMap<>();
         // Get a list of all possible coordinates.
         Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, 9, pos -> {

@@ -24,6 +24,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.GlobalPos;
@@ -140,8 +141,8 @@ public class WorkerBrain {
                 ItemStack stack = villager.getInventory().getStack(i);
                 if (stack.isOf(itemInHand)) {
                     villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, stack);
-                    MCSettlers.LOGGER.info("[WorkerBrain] Villager {} is now holding item: {}, prev item: {}", MCSettlers.workerToString(villager),
-                            stack, prevItemStack);
+                    // MCSettlers.LOGGER.info("[WorkerBrain] Villager {} is now holding item: {}, prev item: {}", MCSettlers.workerToString(villager),
+                    //         stack, prevItemStack);
                     return true;
                 }
             }
@@ -198,7 +199,7 @@ public class WorkerBrain {
                 brain.forget(ModMemoryModules.JOB_WALK_TARGET);
                 // Set job status to no_work
                 setJobStatus(villager, "no_work");
-                MCSettlers.LOGGER.info("[WorkerBrain] Villager {} failed to reach target {} ({} times), giving up.",
+                MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} failed to reach target {} ({} times), giving up.",
                         MCSettlers.workerToString(villager), target.toShortString(), failureCount);
                 return false;
             }
@@ -219,13 +220,18 @@ public class WorkerBrain {
 
     protected boolean checkPositionIsWalkable(VillagerEntity villager, ServerWorld world, BlockPos pos) {
         // Check if a villager would fit in this position
-        if (world.getBlockState(pos).isSolidBlock(world, pos)) {
+        if (!world.getBlockState(pos.down()).isSolidBlock(world, pos.down())) {
+            return false; // Position below must be solid
+        }
+        if (world.getBlockState(pos).isSolidBlock(world, pos) || !world.getBlockState(pos).getCollisionShape(world, pos).isEmpty()) {
+            MCSettlers.LOGGER.warn("{} is solid", world.getBlockState(pos).toString());
             return false;
         }
-        if (world.getBlockState(pos.up()).isSolidBlock(world, pos.up())) {
-            return false; // Position above must be replaceable
+        if (world.getBlockState(pos.up()).isSolidBlock(world, pos.up()) || !world.getBlockState(pos.up()).getCollisionShape(world, pos.up()).isEmpty()) {
+            MCSettlers.LOGGER.warn("{} is solid above", world.getBlockState(pos.up()).toString());
+            return false;
         }
-        return villager.getNavigation().findPathTo(pos, 4) != null;
+        return true;
     }
 
     protected void walkToPosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
@@ -256,6 +262,7 @@ public class WorkerBrain {
                     }
                 }
             }
+
             MCSettlers.LOGGER.warn("[WorkerBrain] No valid position found to walk to, giving up.");
             setJobStatus(villager, "no_work");
             return; // No valid position found, give up

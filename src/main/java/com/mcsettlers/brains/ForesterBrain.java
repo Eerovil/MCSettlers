@@ -48,6 +48,8 @@ public class ForesterBrain extends WorkerBrain {
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
                 setJobStatus(villager, "no_work");
+            } else {
+                setJobStatus(villager, "idle");
             }
         } else if (jobStatus == "no_work") {
             startHoldingItem(villager, ItemStack.EMPTY);
@@ -93,7 +95,6 @@ public class ForesterBrain extends WorkerBrain {
                 if (aboveBlock.isReplaceable() && !aboveBlock.isIn(BlockTags.SAPLINGS)) {
                     // Check if the position is within the radius of the workstation
                     // and is not already occupied by another sapling
-                    MCSettlers.LOGGER.info("Good block state found: {}", aboveBlock);
 
                     if (workstation.getSquaredDistance(pos) <= r2) {
                         return true; // Only consider positions within the radius
