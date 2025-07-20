@@ -50,6 +50,7 @@ public class ForesterBrain extends WorkerBrain {
                 setJobStatus(villager, "no_work");
             }
         } else if (jobStatus == "no_work") {
+            startHoldingItem(villager, ItemStack.EMPTY);
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
             long now = world.getTime();
@@ -58,7 +59,7 @@ public class ForesterBrain extends WorkerBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                setJobStatus(villager, "deposit_items");
+                startDepositingItems(villager, world, workstation);
             }
         } else if (jobStatus == "planting") {
             lookAtBlock(villager, targetLog);
@@ -67,7 +68,7 @@ public class ForesterBrain extends WorkerBrain {
         } else if (jobStatus == "idle") {
             // If inventory is empty, deposit items
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(villager, "deposit_items");
+                startDepositingItems(villager, world, workstation);
             } else {
                 findNewPlantingTarget(villager, world, workstation);
             }
@@ -76,7 +77,7 @@ public class ForesterBrain extends WorkerBrain {
 
     protected void findNewPlantingTarget(
             VillagerEntity villager, ServerWorld world, BlockPos workstation) {
-        MCSettlers.LOGGER.info("Finding new planting target for villager: {}", villager.getUuid());
+        MCSettlers.LOGGER.info("Finding new planting target for villager: {}", MCSettlers.workerToString(villager));
         int r2 = 15 * 15;
         // Logic to find a new planting target
         BlockPos villagerPos = villager.getBlockPos();
@@ -114,7 +115,7 @@ public class ForesterBrain extends WorkerBrain {
         }
 
         setJobStatus(villager, "no_work");
-        MCSettlers.LOGGER.info("No suitable planting target found for villager: {}", villager.getUuid());
+        MCSettlers.LOGGER.info("No suitable planting target found for villager: {}", MCSettlers.workerToString(villager));
     }
 
     protected ItemStack getSapling(VillagerEntity villager) {
@@ -139,7 +140,7 @@ public class ForesterBrain extends WorkerBrain {
         // This is a placeholder; actual implementation would depend on game logic
         setJobStatus(villager, "planting");
 
-        MCSettlers.LOGGER.info("Villager {} is starting to plant trees at {}", villager.getUuid(), targetLog);
+        MCSettlers.LOGGER.info("Villager {} is starting to plant trees at {}", MCSettlers.workerToString(villager), targetLog);
 
         // create sapling at targetLog
         if (targetLog != null) {

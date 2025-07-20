@@ -45,7 +45,7 @@ public class CarrierBrain extends WorkerBrain {
             }
             startPickingUpItem(villager, world, targetBlock);
         } else if (jobStatus == "stop_picking_up_item") {
-            stopPickingUpItem(villager, world, targetBlock);
+            stopPickingUpItem(villager, world, targetBlock, workstation);
         } else if (jobStatus == "deposit_items") {
             keepDepositingItems(villager, world, workstation);
         } else if (jobStatus == "stop_deposit_items") {
@@ -80,8 +80,7 @@ public class CarrierBrain extends WorkerBrain {
             VillagerEntity villager, ServerWorld world) {
         // Logic to find a new carry job, e.g., looking for items to pick up or chests
         // to deposit into
-        // This is a placeholder; actual implementation would depend on game logic
-        setJobStatus(villager, "deposit_items");
+
         // Deposit chest is where the villager will deposit items
         // Target break block is the chest to get item from
 
@@ -137,7 +136,7 @@ public class CarrierBrain extends WorkerBrain {
         }
 
         Brain<?> brain = villager.getBrain();
-        MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", queue.size(), villager.getUuid());
+        MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", queue.size(), MCSettlers.workerToString(villager));
         // Print values for each deposit chest
         for (DepositChestValues chestValuesFrom : queue) {
             for (DepositChestValues chestValuesTo : queue) {
@@ -153,7 +152,7 @@ public class CarrierBrain extends WorkerBrain {
                         if (chestValuesTo.wantedItems.contains(item)) {
                             itemToCarry = item;
                             MCSettlers.LOGGER.info("Found item to carry: {} for villager: {}", itemToCarry,
-                                    villager.getUuid());
+                                    MCSettlers.workerToString(villager));
                             break; // Found an item to carry, no need to check further
                         }
                     }
@@ -161,7 +160,7 @@ public class CarrierBrain extends WorkerBrain {
                     if (itemToCarry == null) {
                         continue;
                     }
-                    MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", villager.getUuid(),
+                    MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", MCSettlers.workerToString(villager),
                             chestValuesTo.pos);
                     brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, chestValuesFrom.pos);
                     brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestValuesTo.pos);
@@ -173,6 +172,12 @@ public class CarrierBrain extends WorkerBrain {
                 }
             }
         }
+        // If no suitable deposit chest found, set job status to no work
+        MCSettlers.LOGGER.info("No suitable deposit chest found for villager: {}", MCSettlers.workerToString(villager));
+        setJobStatus(villager, "no_work");
+        brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+        brain.forget(ModMemoryModules.DEPOSIT_CHEST);
+        brain.forget(ModMemoryModules.ITEM_TO_CARRY);
     }
 
     protected void startPickingUpItem(
@@ -193,7 +198,7 @@ public class CarrierBrain extends WorkerBrain {
         Item itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
         if (itemToCarry == null) {
-            MCSettlers.LOGGER.warn("No item to carry found for villager: {}", villager.getUuid());
+            MCSettlers.LOGGER.warn("No item to carry found for villager: {}", MCSettlers.workerToString(villager));
             return;
         }
 
@@ -229,11 +234,11 @@ public class CarrierBrain extends WorkerBrain {
 
     protected void stopPickingUpItem(
             VillagerEntity villager, ServerWorld world,
-            BlockPos targetBlock) {
+            BlockPos targetBlock, BlockPos workstation) {
         Brain<?> brain = villager.getBrain();
         // Logic to stop picking up item, e.g., resetting hand and chest animation
         ChestAnimationHelper.animateChest(world, targetBlock, false);
-        setJobStatus(villager, "deposit_items");
+        startDepositingItems(villager, world, workstation);
         Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
 
@@ -253,7 +258,7 @@ public class CarrierBrain extends WorkerBrain {
         if (depositChest != null) {
             walkToPosition(villager, world, depositChest, 0.6F);
         } else {
-            MCSettlers.LOGGER.warn("No deposit chest found for villager: {}", villager.getUuid());
+            MCSettlers.LOGGER.warn("No deposit chest found for villager: {}", MCSettlers.workerToString(villager));
         }
     }
 }

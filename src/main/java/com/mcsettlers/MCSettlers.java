@@ -28,6 +28,19 @@ public class MCSettlers implements ModInitializer {
 	private static final WorkerBrain foresterBrain = new ForesterBrain();
 	private static final WorkerBrain carrierBrain = new CarrierBrain();
 
+	public static String workerToString(VillagerEntity villager) {
+		VillagerData data = villager.getVillagerData();
+		RegistryEntry<VillagerProfession> profession = data.profession();
+		String professionName;
+		if (profession != null) {
+			professionName = profession.getKey().map(RegistryKey::getValue).map(Object::toString).orElse("unknown");
+		} else {
+			professionName = "no_profession";
+		}
+		String shortUuid = villager.getUuidAsString().toString().substring(0, 8);
+		return professionName + " (" + shortUuid + ")";
+	}
+
 	public static WorkerBrain getBrainFor(RegistryEntry<VillagerProfession> profession) {
 		if (profession.matchesKey(ModProfessions.WOODCUTTER)) {
 			return woodcutterBrain;
@@ -66,7 +79,7 @@ public class MCSettlers implements ModInitializer {
 											data.type(),
 											customEntry,
 											data.level()));
-									LOGGER.info("Changed villager profession to custom: {} -> {}", villager.getUuid(),
+									LOGGER.info("Changed villager profession to custom: {} -> {}", MCSettlers.workerToString(villager),
 											customKey.getValue());
 								}
 							}

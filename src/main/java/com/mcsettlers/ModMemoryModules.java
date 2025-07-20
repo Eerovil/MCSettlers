@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
+
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
@@ -35,7 +35,7 @@ public class ModMemoryModules {
 
     public static final MemoryModuleType<Integer> JOB_WALK_FAILURE_COUNT = new MemoryModuleType<>(Optional.empty());
 
-    public static final MemoryModuleType<ItemStack> ITEM_IN_HAND = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Item> ITEM_IN_HAND = new MemoryModuleType<>(Optional.empty());
 
     public static List<MemoryModuleType<?>> getAllMemoryModules() {
         return List.of(
