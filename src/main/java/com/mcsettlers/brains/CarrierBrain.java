@@ -40,7 +40,7 @@ public class CarrierBrain extends WorkerBrain {
         Brain<?> brain = villager.getBrain();
 
         if (jobStatus == "walking_to_pick_up") {
-            if (!reallyReachedTarget(villager)) {
+            if (!reallyReachedTarget(world, villager)) {
                 return; // Already walking, nothing to do
             }
             startPickingUpItem(villager, world, targetBlock);
@@ -134,6 +134,8 @@ public class CarrierBrain extends WorkerBrain {
                         }
                     }
                 }
+                // Delete all wanted items from contained items
+                depositChestValues.containedItems.removeAll(depositChestValues.wantedItems);
                 queue.add(depositChestValues);
             }
         }

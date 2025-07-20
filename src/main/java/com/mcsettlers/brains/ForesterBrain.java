@@ -8,6 +8,7 @@ import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 
@@ -18,6 +19,7 @@ import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 
 public class ForesterBrain extends WorkerBrain {
     // Implement Forester-specific behavior here
@@ -35,7 +37,7 @@ public class ForesterBrain extends WorkerBrain {
         Brain<?> brain = villager.getBrain();
 
         if (jobStatus == "walking_to_plant") {
-            if (!reallyReachedTarget(villager)) {
+            if (!reallyReachedTarget(world, villager)) {
                 return;
             }
             startPlanting(villager, world, workstation, targetLog);
@@ -89,19 +91,27 @@ public class ForesterBrain extends WorkerBrain {
         // Get a list of all possible coordinates.
         Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, 9, pos -> {
             BlockState state = world.getBlockState(pos);
-            // Position X and Z must be divisible by 2 to ensure even spacing
-            if (pos.getX() % 2 != 0 || pos.getZ() % 2 != 0) {
-                return false; // Skip positions not divisible by 2
+            // Position X and Z must be divisible by 3 to ensure even spacing
+            if (pos.getX() % 3 != 0 || pos.getZ() % 3 != 0) {
+                return false; // Skip positions not divisible by 3
             }
-            if (state.isIn(BlockTags.DIRT)) {
-                BlockState aboveBlock = world.getBlockState(pos.up());
-                if (aboveBlock.isReplaceable() && !aboveBlock.isIn(BlockTags.SAPLINGS)) {
-                    // Check if the position is within the radius of the workstation
-                    // and is not already occupied by another sapling
+            if (!state.isIn(BlockTags.DIRT)) {
+                return false; // Skip positions that are not dirt
+            }
+            // Must not be next to an interactable block
+            for (Direction direction : Direction.values()) {
+                BlockEntity nearBlockEntity = world.getBlockEntity(pos.offset(direction));
+                if (nearBlockEntity != null) {
+                    return false;
+                }
+            }
+            BlockState aboveBlock = world.getBlockState(pos.up());
+            if (aboveBlock.isReplaceable() && !aboveBlock.isIn(BlockTags.SAPLINGS)) {
+                // Check if the position is within the radius of the workstation
+                // and is not already occupied by another sapling
 
-                    if (workstation.getSquaredDistance(pos) <= r2) {
-                        return true; // Only consider positions within the radius
-                    }
+                if (workstation.getSquaredDistance(pos) <= r2) {
+                    return true; // Only consider positions within the radius
                 }
             }
             return false;

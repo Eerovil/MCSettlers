@@ -73,7 +73,7 @@ public class WoodcutterBrain extends WorkerBrain {
         Brain<?> brain = villager.getBrain();
 
         if (jobStatus == "walking") {
-            if (!reallyReachedTarget(villager)) {
+            if (!reallyReachedTarget(world, villager)) {
                 return; // Already walking, nothing to do
             }
             startBreakingBlock(villager, world, targetLog);

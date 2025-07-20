@@ -18,6 +18,8 @@ import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.WalkTarget;
+import net.minecraft.entity.ai.pathing.Path;
+import net.minecraft.entity.ai.pathing.MobNavigation;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -155,6 +157,7 @@ public class WorkerBrain {
             villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
             MCSettlers.LOGGER.info("[WorkerBrain] Villager {} could not find item {} in inventory, clearing hand.",
                     MCSettlers.workerToString(villager), itemInHand);
+            villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, ItemStack.EMPTY.getItem());
         }
         // No item in hand memory, make sure the villager is not holding anything
         // If they are
@@ -166,7 +169,12 @@ public class WorkerBrain {
         return false;
     }
 
+	protected boolean isAtValidPosition(VillagerEntity villager) {
+		return villager.isOnGround() || villager.isInFluid() || villager.hasVehicle();
+	}
+
     protected boolean reallyReachedTarget(
+            ServerWorld world,
             VillagerEntity villager) {
         int squaredDistanceLimit = 3 * 3; // 3 blocks squared distance
         Brain<?> brain = villager.getBrain();
@@ -204,20 +212,27 @@ public class WorkerBrain {
                 brain.forget(ModMemoryModules.JOB_WALK_TARGET);
                 // Set job status to no_work_path
                 setJobStatus(villager, "no_work_path");
-                MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} failed to reach target {} ({} times), giving up.",
-                        MCSettlers.workerToString(villager), target.toShortString(), failureCount);
+                MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} failed to reach target {}: {} ({} times), giving up.",
+                        MCSettlers.workerToString(villager), target.toShortString(), world.getBlockState(target), failureCount);
                 return false;
             }
         }
+        if (!isAtValidPosition(villager)) {
+            MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} is not at a valid position, cannot continue walking to target {}.",
+                    MCSettlers.workerToString(villager), target.toShortString());
+            return false; // Cannot continue walking to target
+        }
+
         // Add or increment the failure count
         int newFailureCount = optionalFailureCount.orElse(0) + 1;
         brain.remember(ModMemoryModules.JOB_WALK_FAILURE_COUNT, newFailureCount);
         MCSettlers.LOGGER.info("[WorkerBrain] Villager {} failed to reach target {} ({} times)",
                 MCSettlers.workerToString(villager), target.toShortString(), newFailureCount);
         // Try to walk to the target
+        BlockPos goodPos = findWalkablePosition(villager, world, target, 0.6F);
         brain.remember(MemoryModuleType.WALK_TARGET,
                 new net.minecraft.entity.ai.brain.WalkTarget(
-                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(target),
+                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(goodPos),
                         0.6F,
                         1));
         return false;
@@ -232,15 +247,16 @@ public class WorkerBrain {
             MCSettlers.LOGGER.warn("{} is solid", world.getBlockState(pos).toString());
             return false;
         }
+        MCSettlers.LOGGER.info("Not solid: {}", world.getBlockState(pos).toString());
         if (world.getBlockState(pos.up()).isSolidBlock(world, pos.up()) || !world.getBlockState(pos.up()).getCollisionShape(world, pos.up()).isEmpty()) {
             MCSettlers.LOGGER.warn("{} is solid above", world.getBlockState(pos.up()).toString());
             return false;
         }
+        MCSettlers.LOGGER.info("Found good position: {}: {}", pos.toShortString(), world.getBlockState(pos).toString());
         return true;
     }
 
-    protected void walkToPosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
-        Brain<?> brain = villager.getBrain();
+    protected BlockPos findWalkablePosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
         // Make sure pos is not replaceable and has two replaceable blocks above it
         if (!checkPositionIsWalkable(villager, world, pos)) {
             // Check blocks around the position
@@ -252,28 +268,37 @@ public class WorkerBrain {
                             // Found a valid position to walk to
                             MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
                                     newPos.toShortString());
-                            // Try to walk to the target
-                            brain.remember(MemoryModuleType.WALK_TARGET,
-                                    new net.minecraft.entity.ai.brain.WalkTarget(
-                                            new net.minecraft.entity.ai.brain.BlockPosLookTarget(newPos),
-                                            0.6F,
-                                            1));
-                            brain.remember(MemoryModuleType.LOOK_TARGET,
-                                    new net.minecraft.entity.ai.brain.BlockPosLookTarget(newPos));
-                            brain.remember(ModMemoryModules.JOB_WALK_TARGET, newPos);
-                            brain.forget(ModMemoryModules.JOB_WALK_FAILURE_COUNT); // Reset failure count
-                            return;
+                            return newPos;
                         }
                     }
                 }
             }
+        } else {
+            return pos;
+        }
+        MCSettlers.LOGGER.warn("[WorkerBrain] No valid position found to walk to, giving up.");
+        setJobStatus(villager, "no_work_no_walkable_position");
+        return null; // No valid position found, give up
+    }
 
-            MCSettlers.LOGGER.warn("[WorkerBrain] No valid position found to walk to, giving up.");
+    protected void walkToPosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
+        Brain<?> brain = villager.getBrain();
+        BlockPos goodPos = findWalkablePosition(villager, world, pos, speed);
+        if (goodPos == null) {
+            // No valid position found, give up
             setJobStatus(villager, "no_work_no_walkable_position");
-            return; // No valid position found, give up
+            return;
         }
 
-        brain.remember(ModMemoryModules.JOB_WALK_TARGET, pos);
+        // Try to walk to the target
+        brain.remember(MemoryModuleType.WALK_TARGET,
+                new net.minecraft.entity.ai.brain.WalkTarget(
+                        new net.minecraft.entity.ai.brain.BlockPosLookTarget(goodPos),
+                        0.6F,
+                        1));
+        brain.remember(MemoryModuleType.LOOK_TARGET,
+                new net.minecraft.entity.ai.brain.BlockPosLookTarget(goodPos));
+        brain.remember(ModMemoryModules.JOB_WALK_TARGET, goodPos);
         brain.forget(ModMemoryModules.JOB_WALK_FAILURE_COUNT); // Reset failure count
     }
 
@@ -455,7 +480,7 @@ public class WorkerBrain {
     protected void keepDepositingItems(
             VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
-        if (!reallyReachedTarget(villager)) {
+        if (!reallyReachedTarget(world, villager)) {
             return;
         }
 
@@ -526,7 +551,7 @@ public class WorkerBrain {
             VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
         // If currently walking, return;
-        if (!reallyReachedTarget(villager)) {
+        if (!reallyReachedTarget(world, villager)) {
             return;
         }
 
