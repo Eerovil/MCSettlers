@@ -52,9 +52,9 @@ public class CarrierBrain extends WorkerBrain {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(villager, "no_work");
+                setJobStatus(villager, "no_work_after_deposit");
             }
-        } else if (jobStatus == "no_work") {
+        } else if (jobStatus.startsWith("no_work")) {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
             long now = world.getTime();
@@ -68,6 +68,9 @@ public class CarrierBrain extends WorkerBrain {
         } else if (jobStatus == "idle") {
             // If inventory is empty, deposit items
             findNewCarryJob(villager, world);
+        } else {
+            MCSettlers.LOGGER.warn("[WoodcutterBrain] Unknown job status: " + jobStatus);
+            setJobStatus(villager, "no_work_unknown_status");
         }
     }
 
@@ -174,7 +177,7 @@ public class CarrierBrain extends WorkerBrain {
         }
         // If no suitable deposit chest found, set job status to no work
         MCSettlers.LOGGER.info("No suitable deposit chest found for villager: {}", MCSettlers.workerToString(villager));
-        setJobStatus(villager, "no_work");
+        setJobStatus(villager, "no_work_no_chest");
         brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
         brain.forget(ModMemoryModules.DEPOSIT_CHEST);
         brain.forget(ModMemoryModules.ITEM_TO_CARRY);
@@ -229,7 +232,7 @@ public class CarrierBrain extends WorkerBrain {
         super.stopDepositingItems(villager, world, workstation);
         // Stop holding item in hand
         startHoldingItem(villager, ItemStack.EMPTY);
-        setJobStatus(villager, "no_work");
+        setJobStatus(villager, "no_work_after_deposit");
     }
 
     protected void stopPickingUpItem(

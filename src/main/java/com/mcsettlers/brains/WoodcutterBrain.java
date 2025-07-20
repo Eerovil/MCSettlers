@@ -92,7 +92,7 @@ public class WoodcutterBrain extends WorkerBrain {
             keepDepositingItems(villager, world, workstation);
         } else if (jobStatus == "stop_deposit_items") {
             stopDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "no_work") {
+        } else if (jobStatus.startsWith("no_work")) {
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
             long now = world.getTime();
@@ -121,6 +121,9 @@ public class WoodcutterBrain extends WorkerBrain {
                             ));
                 }
             }
+        } else {
+            MCSettlers.LOGGER.warn("[WoodcutterBrain] Unknown job status: " + jobStatus);
+            setJobStatus(villager, "no_work_unknown_status");
         }
     }
 
@@ -152,7 +155,7 @@ public class WoodcutterBrain extends WorkerBrain {
             setJobStatus(villager, "walking");
         } else {
             MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found in radius " + searchRadius + " around " + villagerPos.toShortString());
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_logs");
         }
     }
 
@@ -188,7 +191,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
                 brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
                 brain.forget(ModMemoryModules.BREAK_PROGRESS);
-                setJobStatus(villager, "no_work");
+                setJobStatus(villager, "no_work_too_far_from_log");
                 return;
             }
             Vec3d blockCenter = Vec3d.ofCenter(targetLog);

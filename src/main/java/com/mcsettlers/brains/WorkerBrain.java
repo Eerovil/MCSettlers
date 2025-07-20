@@ -40,6 +40,11 @@ public class WorkerBrain {
     protected Set<TagKey<Item>> WANTED_ITEMS = ImmutableSet.of();
 
     public void tick(VillagerEntity villager, ServerWorld world) {
+        // Skip every other tick to reduce load
+        if (world.getTime() % 2 != 0) {
+            return;
+        }
+
         long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
 
@@ -180,7 +185,7 @@ public class WorkerBrain {
         // false, if not reached.
         Optional<BlockPos> jobWalkTarget = brain.getOptionalMemory(ModMemoryModules.JOB_WALK_TARGET);
         if (jobWalkTarget.isEmpty()) {
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_walk_target");
             return false;
         }
         BlockPos target = jobWalkTarget.get();
@@ -197,8 +202,8 @@ public class WorkerBrain {
             if (failureCount >= 3) {
                 // Too many failures, give up
                 brain.forget(ModMemoryModules.JOB_WALK_TARGET);
-                // Set job status to no_work
-                setJobStatus(villager, "no_work");
+                // Set job status to no_work_path
+                setJobStatus(villager, "no_work_path");
                 MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} failed to reach target {} ({} times), giving up.",
                         MCSettlers.workerToString(villager), target.toShortString(), failureCount);
                 return false;
@@ -214,7 +219,7 @@ public class WorkerBrain {
                 new net.minecraft.entity.ai.brain.WalkTarget(
                         new net.minecraft.entity.ai.brain.BlockPosLookTarget(target),
                         0.6F,
-                        2));
+                        1));
         return false;
     }
 
@@ -252,7 +257,7 @@ public class WorkerBrain {
                                     new net.minecraft.entity.ai.brain.WalkTarget(
                                             new net.minecraft.entity.ai.brain.BlockPosLookTarget(newPos),
                                             0.6F,
-                                            2));
+                                            1));
                             brain.remember(MemoryModuleType.LOOK_TARGET,
                                     new net.minecraft.entity.ai.brain.BlockPosLookTarget(newPos));
                             brain.remember(ModMemoryModules.JOB_WALK_TARGET, newPos);
@@ -264,7 +269,7 @@ public class WorkerBrain {
             }
 
             MCSettlers.LOGGER.warn("[WorkerBrain] No valid position found to walk to, giving up.");
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_walkable_position");
             return; // No valid position found, give up
         }
 
@@ -421,7 +426,7 @@ public class WorkerBrain {
             } else {
                 MCSettlers.LOGGER
                         .info("[WorkerBrain] No nearby chest found for villager " + MCSettlers.workerToString(villager));
-                setJobStatus(villager, "no_work");
+                setJobStatus(villager, "no_work_no_chest");
                 return Optional.empty();
             }
         }
@@ -435,7 +440,7 @@ public class WorkerBrain {
         Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation);
         if (optionalChestPos.isEmpty()) {
             // No chest found, set job status to no_work
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_chest");
             return;
         }
 
@@ -457,7 +462,7 @@ public class WorkerBrain {
         Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation);
         if (optionalChestPos.isEmpty()) {
             // No chest found, set job status to no_work
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_chest");
             return;
         }
 
@@ -467,7 +472,7 @@ public class WorkerBrain {
         if (!(chest instanceof net.minecraft.block.entity.ChestBlockEntity chestEntity)) {
             MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} found a non-chest block at {}, cannot deposit items.",
                     MCSettlers.workerToString(villager), pos);
-            setJobStatus(villager, "no_work");
+            setJobStatus(villager, "no_work_no_chest");
             return;
         }
         // To open the chest

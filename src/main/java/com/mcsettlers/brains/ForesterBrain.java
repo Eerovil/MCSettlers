@@ -47,11 +47,11 @@ public class ForesterBrain extends WorkerBrain {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
-                setJobStatus(villager, "no_work");
+                setJobStatus(villager, "no_work_after_deposit");
             } else {
                 setJobStatus(villager, "idle");
             }
-        } else if (jobStatus == "no_work") {
+        } else if (jobStatus.startsWith("no_work")) {
             startHoldingItem(villager, ItemStack.EMPTY);
             // Set timer for 10 seconds and make the villager idle
             // This is a placeholder; actual implementation would depend on game logic
@@ -74,6 +74,9 @@ public class ForesterBrain extends WorkerBrain {
             } else {
                 findNewPlantingTarget(villager, world, workstation);
             }
+        } else {
+            MCSettlers.LOGGER.warn("[WoodcutterBrain] Unknown job status: " + jobStatus);
+            setJobStatus(villager, "no_work_unknown_status");
         }
     }
 
