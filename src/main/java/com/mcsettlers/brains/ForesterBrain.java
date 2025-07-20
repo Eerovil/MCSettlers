@@ -89,7 +89,7 @@ public class ForesterBrain extends WorkerBrain {
         // Logic to find a new planting target
         BlockPos villagerPos = villager.getBlockPos();
         // Get a list of all possible coordinates.
-        Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, 9, pos -> {
+        Iterable<BlockPos> villagerRadiusCoords = RadiusGenerator.radiusCoordinates(villagerPos, workstation, 9, pos -> {
             BlockState state = world.getBlockState(pos);
             // Position X and Z must be divisible by 3 to ensure even spacing
             if (pos.getX() % 3 != 0 || pos.getZ() % 3 != 0) {

@@ -10,6 +10,7 @@ import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.ChestAnimationHelper;
+import com.mcsettlers.utils.RadiusGenerator;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -259,18 +260,12 @@ public class WorkerBrain {
     protected BlockPos findWalkablePosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
         // Make sure pos is not replaceable and has two replaceable blocks above it
         if (!checkPositionIsWalkable(villager, world, pos)) {
-            // Check blocks around the position
-            for (int dx = -3; dx <= 3; dx++) {
-                for (int dz = -3; dz <= 3; dz++) {
-                    for (int dy = -2; dy <= 2; dy++) {
-                        BlockPos newPos = pos.add(dx, dy, dz);
-                        if (checkPositionIsWalkable(villager, world, newPos)) {
-                            // Found a valid position to walk to
-                            MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
-                                    newPos.toShortString());
-                            return newPos;
-                        }
-                    }
+            // Check blocks around the position, and close to villager
+            for (BlockPos newPos : RadiusGenerator.radiusCoordinates(pos, villager.getBlockPos(), 3)) {
+                if (checkPositionIsWalkable(villager, world, newPos)) {
+                    MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
+                            newPos.toShortString());
+                    return newPos;
                 }
             }
         } else {
@@ -346,19 +341,14 @@ public class WorkerBrain {
         }
 
         int searchRadius = 10;
-        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
-                    BlockPos pos = workstation.add(dx, dy, dz);
-                    // Skip if this position is already used by another villager
-                    if (otherPositions.contains(pos)) {
-                        continue;
-                    }
-                    BlockState state = world.getBlockState(pos);
-                    if (state.isOf(Blocks.CHEST)) {
-                        return Optional.of(pos);
-                    }
-                }
+        for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, searchRadius)) {
+            // Skip if this position is already used by another villager
+            if (otherPositions.contains(pos)) {
+                continue;
+            }
+            BlockState state = world.getBlockState(pos);
+            if (state.isOf(Blocks.CHEST)) {
+                return Optional.of(pos);
             }
         }
         return Optional.empty();
@@ -559,26 +549,26 @@ public class WorkerBrain {
         BlockPos villagerPos = villager.getBlockPos();
         Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
         // Search for first gatherable item in range
-        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (int dy = -2; dy <= 1; dy++) {
-                for (int dz = -searchRadius; dz <= searchRadius; dz++) {
-                    BlockPos pos = villagerPos.add(dx, dy, dz);
-                    if (workstation != null && workstation.getSquaredDistance(pos) > searchRadius * searchRadius)
-                        continue;
-                    // Check for item entity at this position
-                    List<net.minecraft.entity.ItemEntity> items = world.getEntitiesByClass(
-                            net.minecraft.entity.ItemEntity.class,
-                            new net.minecraft.util.math.Box(pos),
-                            itemEntity -> gatherableItems.contains(itemEntity.getStack().getItem()));
-                    if (!items.isEmpty()) {
-                        net.minecraft.entity.ItemEntity targetItem = items.get(0);
-                        BlockPos itemPos = targetItem.getBlockPos();
-                        walkToPosition(villager, world, itemPos, 0.6F);
-                        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to gatherable item {} at {}",
-                                MCSettlers.workerToString(villager), targetItem.getStack().getItem(), itemPos);
-                        return;
-                    }
-                }
+
+        for (BlockPos pos : RadiusGenerator.radiusCoordinates(villagerPos, searchRadius)) {
+            // Skip if too far away in Y axis
+            if (Math.abs(pos.getY() - villagerPos.getY()) > 2) {
+                continue;
+            }
+            if (workstation != null && workstation.getSquaredDistance(pos) > searchRadius * searchRadius)
+                continue;
+            // Check for item entity at this position
+            List<net.minecraft.entity.ItemEntity> items = world.getEntitiesByClass(
+                    net.minecraft.entity.ItemEntity.class,
+                    new net.minecraft.util.math.Box(pos),
+                    itemEntity -> gatherableItems.contains(itemEntity.getStack().getItem()));
+            if (!items.isEmpty()) {
+                net.minecraft.entity.ItemEntity targetItem = items.get(0);
+                BlockPos itemPos = targetItem.getBlockPos();
+                walkToPosition(villager, world, itemPos, 0.6F);
+                MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to gatherable item {} at {}",
+                        MCSettlers.workerToString(villager), targetItem.getStack().getItem(), itemPos);
+                return;
             }
         }
         MCSettlers.LOGGER.info("[WorkerBrain] No gatherable items found in radius " + searchRadius + " around "
