@@ -19,7 +19,6 @@ import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 
 public class ForesterBrain extends WorkerBrain {
     // Implement Forester-specific behavior here
@@ -99,10 +98,13 @@ public class ForesterBrain extends WorkerBrain {
                 return false; // Skip positions that are not dirt
             }
             // Must not be next to an interactable block
-            for (Direction direction : Direction.values()) {
-                BlockEntity nearBlockEntity = world.getBlockEntity(pos.offset(direction));
-                if (nearBlockEntity != null) {
-                    return false;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dz == 0) continue; // Skip the current position
+                    BlockEntity nearBlockEntity = world.getBlockEntity(pos.up().add(dx, 0, dz));
+                    if (nearBlockEntity != null) {
+                        return false; // Skip positions next to interactable blocks
+                    }
                 }
             }
             BlockState aboveBlock = world.getBlockState(pos.up());

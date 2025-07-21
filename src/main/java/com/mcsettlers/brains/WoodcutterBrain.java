@@ -231,14 +231,15 @@ public class WoodcutterBrain extends WorkerBrain {
             brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + progressPerTick);
         } else {
             System.out.println("[WoodcutterBrain] Actually breaking block at " + targetLog.toShortString());
-            world.breakBlock(targetLog, true, villager);
+            boolean currentlyPillaring = brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).isPresent()
+                    && brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).get().size() > 0;
+            world.breakBlock(targetLog, !currentlyPillaring, villager);
             world.setBlockBreakingInfo(villager.getId(), targetLog, -1); // clear animation
 
             brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
             brain.forget(ModMemoryModules.BREAK_PROGRESS);
             // if pillaring, keep pillaring
-            if (brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).isPresent()
-                    && brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).get().size() > 0) {
+            if (currentlyPillaring) {
                 if (brain.getOptionalMemory(ModMemoryModules.KEEP_PILLARING).orElse(false)) {
                     setJobStatus(villager, "pillaring");
                 } else {

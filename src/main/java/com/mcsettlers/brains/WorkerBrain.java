@@ -1,5 +1,6 @@
 package com.mcsettlers.brains;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -19,17 +20,13 @@ import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.WalkTarget;
-import net.minecraft.entity.ai.pathing.Path;
-import net.minecraft.entity.ai.pathing.MobNavigation;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
 
@@ -194,7 +191,7 @@ public class WorkerBrain {
         // false, if not reached.
         Optional<BlockPos> jobWalkTarget = brain.getOptionalMemory(ModMemoryModules.JOB_WALK_TARGET);
         if (jobWalkTarget.isEmpty()) {
-            setJobStatus(villager, "no_work_no_walk_target");
+            setJobStatus(villager, "no_work_taking_a_break");
             return false;
         }
         BlockPos target = jobWalkTarget.get();
@@ -229,8 +226,8 @@ public class WorkerBrain {
         brain.remember(ModMemoryModules.JOB_WALK_FAILURE_COUNT, newFailureCount);
         MCSettlers.LOGGER.info("[WorkerBrain] Villager {} failed to reach target {} ({} times)",
                 MCSettlers.workerToString(villager), target.toShortString(), newFailureCount);
-        // Try to walk to the target
-        BlockPos goodPos = findWalkablePosition(villager, world, target, 0.6F);
+        // Try to find a new position to walk to
+        BlockPos goodPos = findWalkablePosition(villager, world, target, 0.6F, java.util.Collections.singletonList(walkTarget));
         brain.remember(MemoryModuleType.WALK_TARGET,
                 new net.minecraft.entity.ai.brain.WalkTarget(
                         new net.minecraft.entity.ai.brain.BlockPosLookTarget(goodPos),
@@ -258,11 +255,15 @@ public class WorkerBrain {
     }
 
     protected BlockPos findWalkablePosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed) {
+        return findWalkablePosition(villager, world, pos, speed, new ArrayList<BlockPos>());
+    }
+
+    protected BlockPos findWalkablePosition(VillagerEntity villager, ServerWorld world, BlockPos pos, float speed, List<BlockPos> notAllowedPositions) {
         // Make sure pos is not replaceable and has two replaceable blocks above it
         if (!checkPositionIsWalkable(villager, world, pos)) {
             // Check blocks around the position, and close to villager
             for (BlockPos newPos : RadiusGenerator.radiusCoordinates(pos, villager.getBlockPos(), 3)) {
-                if (checkPositionIsWalkable(villager, world, newPos)) {
+                if (checkPositionIsWalkable(villager, world, newPos) && !notAllowedPositions.contains(newPos)) {
                     MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
                             newPos.toShortString());
                     return newPos;
@@ -550,7 +551,7 @@ public class WorkerBrain {
         Set<Item> gatherableItems = villager.getVillagerData().profession().value().gatherableItems();
         // Search for first gatherable item in range
 
-        for (BlockPos pos : RadiusGenerator.radiusCoordinates(villagerPos, searchRadius)) {
+        for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, villagerPos, searchRadius)) {
             // Skip if too far away in Y axis
             if (Math.abs(pos.getY() - villagerPos.getY()) > 2) {
                 continue;
