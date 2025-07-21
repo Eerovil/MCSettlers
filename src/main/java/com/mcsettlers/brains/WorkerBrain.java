@@ -44,9 +44,9 @@ public class WorkerBrain {
 
     public Set<Item> getWantedItems(VillagerEntity villager) {
         // Check memory for wanted items override
-        Optional<Set<Item>> optionalWantedItems = villager.getBrain().getOptionalMemory(ModMemoryModules.WANTED_ITEMS);
+        Optional<Set<RegistryEntry<Item>>> optionalWantedItems = villager.getBrain().getOptionalMemory(ModMemoryModules.WANTED_ITEMS);
         if (optionalWantedItems.isPresent()) {
-            return optionalWantedItems.get();
+            return optionalWantedItems.get().stream().map(RegistryEntry::value).collect(Collectors.toSet());
         }
         // If no override, return the default wanted items
         return WANTED_ITEM_TAGS.stream()
@@ -62,7 +62,17 @@ public class WorkerBrain {
         }
         return items;
     }
-    
+
+    public void initCustomBrain(VillagerEntity villager, ServerWorld world) {
+        // Initialize the custom brain for the villager
+        // Read memory values
+        Brain<?> brain = villager.getBrain();
+        BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
+                .map(GlobalPos::pos)
+                .orElse(null);
+        findDepositChest(world, workstation);
+    }
+
     public void tick(VillagerEntity villager, ServerWorld world) {
         // Skip every other tick to reduce load
         if (world.getTime() % 2 != 0) {
@@ -84,6 +94,8 @@ public class WorkerBrain {
 
         if (jobStatus == null || jobStatus.isEmpty() || jobStatus.equals("unknown")) {
             // If job status is unknown, set it to idle
+            MCSettlers.LOGGER.warn("[WorkerBrain] Villager " + MCSettlers.workerToString(villager)
+                    + " has unknown job status: " + jobStatus + ", setting to idle.");
             setJobStatus(villager, "idle");
             jobStatus = "idle"; // Update local variable to avoid repeated lookups
         }
@@ -140,7 +152,7 @@ public class WorkerBrain {
     protected void startHoldingItem(
             VillagerEntity villager, ItemStack itemStack) {
         villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, itemStack);
-        villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, itemStack.getItem());
+        villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, Registries.ITEM.getEntry(itemStack.getItem()));
     }
 
     protected void startHoldingItem(
@@ -156,9 +168,9 @@ public class WorkerBrain {
     protected boolean keepHoldingItemInHand(
             VillagerEntity villager) {
         // Check memory for item in hand
-        Optional<Item> optionalItemInHand = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_IN_HAND);
+        Optional<RegistryEntry<Item>> optionalItemInHand = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_IN_HAND);
         if (optionalItemInHand.isPresent()) {
-            Item itemInHand = optionalItemInHand.get();
+            Item itemInHand = optionalItemInHand.get().value();
             // Check if the villager is already holding the item
             ItemStack prevItemStack = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND);
             if (prevItemStack.isOf(itemInHand)) {
@@ -179,7 +191,7 @@ public class WorkerBrain {
             villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
             MCSettlers.LOGGER.info("[WorkerBrain] Villager {} could not find item {} in inventory, clearing hand.",
                     MCSettlers.workerToString(villager), itemInHand);
-            villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, ItemStack.EMPTY.getItem());
+            villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, Registries.ITEM.getEntry(Items.AIR));
         }
         // No item in hand memory, make sure the villager is not holding anything
         // If they are
@@ -326,13 +338,13 @@ public class WorkerBrain {
             VillagerEntity villager, ServerWorld world,
             String jobStatus, BlockPos workstation, BlockPos targetLog) {
 
-        if (jobStatus == "walking") {
+        if (jobStatus.equals("walking")) {
             return;
-        } else if (jobStatus == "picking_up_blocks") {
+        } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
-        } else if (jobStatus == "deposit_items") {
+        } else if (jobStatus.equals("deposit_items")) {
             keepDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "stop_deposit_items") {
+        } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
         }
     }

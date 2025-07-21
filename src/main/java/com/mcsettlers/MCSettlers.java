@@ -86,6 +86,10 @@ public class MCSettlers implements ModInitializer {
 											data.level()));
 									LOGGER.info("Changed villager profession to custom: {} -> {}", MCSettlers.workerToString(villager),
 											customKey.getValue());
+									WorkerBrain brain = getBrainFor(customEntry);
+									if (brain != null) {
+										brain.initCustomBrain(villager, world);
+									}
 								}
 							}
 						}

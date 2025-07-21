@@ -35,16 +35,16 @@ public class ForesterBrain extends WorkerBrain {
 
         Brain<?> brain = villager.getBrain();
 
-        if (jobStatus == "walking_to_plant") {
+        if (jobStatus.equals("walking_to_plant")) {
             if (!reallyReachedTarget(world, villager)) {
                 return;
             }
             startPlanting(villager, world, workstation, targetLog);
-        } else if (jobStatus == "picking_up_blocks") {
+        } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
-        } else if (jobStatus == "deposit_items") {
+        } else if (jobStatus.equals("deposit_items")) {
             keepDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "stop_deposit_items") {
+        } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
@@ -64,11 +64,11 @@ public class ForesterBrain extends WorkerBrain {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
                 startDepositingItems(villager, world, workstation);
             }
-        } else if (jobStatus == "planting") {
+        } else if (jobStatus.equals("planting")) {
             lookAtBlock(villager, targetLog);
             setJobStatus(villager, "idle");
             pauseForMS(villager, world, 1000);
-        } else if (jobStatus == "idle") {
+        } else if (jobStatus.equals("idle")) {
             // If inventory is empty, deposit items
             if (villager.getInventory().isEmpty()) {
                 startDepositingItems(villager, world, workstation);
@@ -76,7 +76,7 @@ public class ForesterBrain extends WorkerBrain {
                 findNewPlantingTarget(villager, world, workstation);
             }
         } else {
-            MCSettlers.LOGGER.warn("[WoodcutterBrain] Unknown job status: " + jobStatus);
+            MCSettlers.LOGGER.warn("[Forester] Unknown job status: " + jobStatus);
             setJobStatus(villager, "no_work_unknown_status");
         }
     }

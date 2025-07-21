@@ -5,42 +5,44 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.mcsettlers.utils.AvailableRecipe;
+import com.mojang.serialization.Codec;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.item.Item;
 
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 public class ModMemoryModules {
-    public static final MemoryModuleType<String> JOB_STATUS = new MemoryModuleType<>(Optional.empty()); // no codec
+    public static final MemoryModuleType<String> JOB_STATUS = new MemoryModuleType<>(Optional.of(Codec.STRING)); // no codec
                                                                                                         // needed
 
-    public static final MemoryModuleType<BlockPos> TARGET_BREAK_BLOCK = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<BlockPos> TARGET_BREAK_BLOCK = new MemoryModuleType<>(Optional.of(BlockPos.CODEC));
 
-    public static final MemoryModuleType<Float> BREAK_PROGRESS = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Float> BREAK_PROGRESS = new MemoryModuleType<>(Optional.of(Codec.FLOAT));
 
-    public static final MemoryModuleType<Long> NO_WORK_UNTIL_TICK = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Long> NO_WORK_UNTIL_TICK = new MemoryModuleType<>(Optional.of(Codec.LONG));
 
-    public static final MemoryModuleType<List<BlockPos>> PILLAR_BLOCKS = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<List<BlockPos>> PILLAR_BLOCKS = new MemoryModuleType<>(Optional.of(Codec.list(BlockPos.CODEC)));
 
-    public static final MemoryModuleType<Boolean> KEEP_PILLARING = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Boolean> KEEP_PILLARING = new MemoryModuleType<>(Optional.of(Codec.BOOL));
 
-    public static final MemoryModuleType<BlockPos> DEPOSIT_CHEST = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<BlockPos> DEPOSIT_CHEST = new MemoryModuleType<>(Optional.of(BlockPos.CODEC));
 
-    public static final MemoryModuleType<Long> PAUSE_EVERYTHING_UNTIL = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Long> PAUSE_EVERYTHING_UNTIL = new MemoryModuleType<>(Optional.of(Codec.LONG));
 
-    public static final MemoryModuleType<Item> ITEM_TO_CARRY = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<RegistryEntry<Item>> ITEM_TO_CARRY = new MemoryModuleType<>(Optional.of(Item.ENTRY_CODEC));
 
-    public static final MemoryModuleType<BlockPos> JOB_WALK_TARGET = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<BlockPos> JOB_WALK_TARGET = new MemoryModuleType<>(Optional.of(BlockPos.CODEC));
 
-    public static final MemoryModuleType<Integer> JOB_WALK_FAILURE_COUNT = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Integer> JOB_WALK_FAILURE_COUNT = new MemoryModuleType<>(Optional.of(Codec.INT));
 
-    public static final MemoryModuleType<Item> ITEM_IN_HAND = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<RegistryEntry<Item>> ITEM_IN_HAND = new MemoryModuleType<>(Optional.of(Item.ENTRY_CODEC));
 
-    public static final MemoryModuleType<Set<Item>> WANTED_ITEMS = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<Set<RegistryEntry<Item>>> WANTED_ITEMS = new MemoryModuleType<>(Optional.empty());
 
     public static final MemoryModuleType<Set<AvailableRecipe>> AVAILABLE_RECIPES = new MemoryModuleType<>(Optional.empty());
 

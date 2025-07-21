@@ -7,17 +7,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import javax.swing.text.html.parser.Entity;
-
-import com.jcraft.jorbis.Block;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.AvailableRecipe;
 
-import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
-import net.minecraft.entity.decoration.BlockAttachedEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
@@ -26,6 +21,8 @@ import net.minecraft.item.Items;
 import net.minecraft.recipe.CraftingRecipe;
 import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.recipe.ServerRecipeManager;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -41,12 +38,12 @@ public class CrafterBrain extends WorkerBrain {
 
         Brain<?> brain = villager.getBrain();
 
-        if (jobStatus == "refresh_crafting_recipe") {
+        if (jobStatus.equals("refresh_crafting_recipe")) {
             refreshCraftingRecipes(villager, world, workstation);
             startDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "deposit_items") {
+        } else if (jobStatus.equals("deposit_items")) {
             keepDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "stop_deposit_items") {
+        } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
@@ -181,10 +178,10 @@ public class CrafterBrain extends WorkerBrain {
         Set<AvailableRecipe> newAvailableRecipes = getAvailableRecipes(villager, world, workstation);
         if (newAvailableRecipes != null) {
             brain.remember(ModMemoryModules.AVAILABLE_RECIPES, newAvailableRecipes);
-            Set<Item> wantedItems = new HashSet<>();
+            Set<RegistryEntry<Item>> wantedItems = new HashSet<>();
             for (AvailableRecipe recipe : newAvailableRecipes) {
                 for (Item item : recipe.getWantedItems()) {
-                    wantedItems.add(item);
+                    wantedItems.add(Registries.ITEM.getEntry(item));
                 }
             }
             brain.remember(ModMemoryModules.WANTED_ITEMS, wantedItems);

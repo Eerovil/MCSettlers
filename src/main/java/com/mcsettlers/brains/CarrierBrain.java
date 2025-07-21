@@ -17,6 +17,8 @@ import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
@@ -36,16 +38,16 @@ public class CarrierBrain extends WorkerBrain {
 
         Brain<?> brain = villager.getBrain();
 
-        if (jobStatus == "walking_to_pick_up") {
+        if (jobStatus.equals("walking_to_pick_up")) {
             if (!reallyReachedTarget(world, villager)) {
                 return; // Already walking, nothing to do
             }
             startPickingUpItem(villager, world, targetBlock);
-        } else if (jobStatus == "stop_picking_up_item") {
+        } else if (jobStatus.equals("stop_picking_up_item")) {
             stopPickingUpItem(villager, world, targetBlock, workstation);
-        } else if (jobStatus == "deposit_items") {
+        } else if (jobStatus.equals("deposit_items")) {
             keepDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "stop_deposit_items") {
+        } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
             if (villager.getInventory().isEmpty()) {
@@ -62,11 +64,11 @@ public class CarrierBrain extends WorkerBrain {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
                 setJobStatus(villager, "idle");
             }
-        } else if (jobStatus == "idle") {
+        } else if (jobStatus.equals("idle")) {
             // If inventory is empty, deposit items
             findNewCarryJob(villager, world);
         } else {
-            MCSettlers.LOGGER.warn("[WoodcutterBrain] Unknown job status: " + jobStatus);
+            MCSettlers.LOGGER.warn("[CarrierBrain] Unknown job status: " + jobStatus);
             setJobStatus(villager, "no_work_unknown_status");
         }
     }
@@ -166,7 +168,7 @@ public class CarrierBrain extends WorkerBrain {
                             chestValuesTo.pos);
                     brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, chestValuesFrom.pos);
                     brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestValuesTo.pos);
-                    brain.remember(ModMemoryModules.ITEM_TO_CARRY, itemToCarry);
+                    brain.remember(ModMemoryModules.ITEM_TO_CARRY, Registries.ITEM.getEntry(itemToCarry));
                     // Set walk target with reasonable completion range and duration
                     walkToPosition(villager, world, chestValuesFrom.pos, 0.6F);
                     setJobStatus(villager, "walking_to_pick_up");
@@ -197,7 +199,7 @@ public class CarrierBrain extends WorkerBrain {
         }
 
         // Find itemstack to carry
-        Item itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+        RegistryEntry<Item> itemToCarry = villager.getBrain().getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
         if (itemToCarry == null) {
             MCSettlers.LOGGER.warn("No item to carry found for villager: {}", MCSettlers.workerToString(villager));
@@ -210,7 +212,7 @@ public class CarrierBrain extends WorkerBrain {
 
         for (int i = 0; i < chest.size(); i++) {
             ItemStack stack = chest.getStack(i);
-            if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
+            if (stack.getItem() == itemToCarry.value() && stack.getCount() > 0) {
                 // Add one item to villager's inventory
                 ItemStack carriedStack = stack.copy();
                 carriedStack.setCount(1); // Take only one item
@@ -241,13 +243,13 @@ public class CarrierBrain extends WorkerBrain {
         // Logic to stop picking up item, e.g., resetting hand and chest animation
         ChestAnimationHelper.animateChest(world, targetBlock, false);
         startDepositingItems(villager, world, workstation);
-        Item itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
+        RegistryEntry<Item> itemToCarry = brain.getOptionalMemory(ModMemoryModules.ITEM_TO_CARRY)
                 .orElse(null);
 
         if (itemToCarry != null) {
             for (int i = 0; i < villager.getInventory().size(); i++) {
                 ItemStack stack = villager.getInventory().getStack(i);
-                if (stack.getItem() == itemToCarry && stack.getCount() > 0) {
+                if (stack.getItem() == itemToCarry.value() && stack.getCount() > 0) {
                     startHoldingItem(villager, stack);
                     break; // Found the item to carry, set it in hand
                 }

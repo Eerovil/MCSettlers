@@ -72,25 +72,25 @@ public class WoodcutterBrain extends WorkerBrain {
 
         Brain<?> brain = villager.getBrain();
 
-        if (jobStatus == "walking") {
+        if (jobStatus.equals("walking")) {
             if (!reallyReachedTarget(world, villager)) {
                 return; // Already walking, nothing to do
             }
             startBreakingBlock(villager, world, targetLog);
-        } else if (jobStatus == "breaking") {
+        } else if (jobStatus.equals("breaking")) {
             keepBreakingBlock(villager, world, targetLog, workstation);
-        } else if (jobStatus == "idle") {
+        } else if (jobStatus.equals("idle")) {
             // If idle, we can search for logs
             findNewTarget(villager, world, workstation);
-        } else if (jobStatus == "pillaring") {
+        } else if (jobStatus.equals("pillaring")) {
             keepPillaring(villager, world, targetLog);
-        } else if (jobStatus == "stopping_pillaring") {
+        } else if (jobStatus.equals("stopping_pillaring")) {
             keepStoppingPillaring(villager, world, targetLog);
-        } else if (jobStatus == "picking_up_blocks") {
+        } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
-        } else if (jobStatus == "deposit_items") {
+        } else if (jobStatus.equals("deposit_items")) {
             keepDepositingItems(villager, world, workstation);
-        } else if (jobStatus == "stop_deposit_items") {
+        } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
         } else if (jobStatus.startsWith("no_work")) {
             // Set timer for 10 seconds and make the villager idle
