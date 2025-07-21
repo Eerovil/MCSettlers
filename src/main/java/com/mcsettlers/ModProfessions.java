@@ -21,9 +21,11 @@ import com.google.common.collect.ImmutableSet;
 
 public class ModProfessions {
     public static final RegistryKey<VillagerProfession> WOODCUTTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION,
-            Identifier.of("mcsettlers:woodcutter"));
+        Identifier.of("mcsettlers:woodcutter"));
     public static final RegistryKey<VillagerProfession> FORESTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION,
-            Identifier.of("mcsettlers:forester"));
+        Identifier.of("mcsettlers:forester"));
+    public static final RegistryKey<VillagerProfession> CRAFTER = RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION,
+        Identifier.of("mcsettlers:crafter"));
 
     // Maps vanilla profession keys to custom profession keys (e.g., FLETCHER ->
     // WOODCUTTER)
@@ -32,6 +34,7 @@ public class ModProfessions {
     public static void register() {
         registerWoodcutter();
         registerForester();
+        registerCrafter();
         registerProfessionMappings();
     }
 
@@ -43,7 +46,32 @@ public class ModProfessions {
         VANILLA_TO_CUSTOM_PROFESSION_MAP.put(
                 RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("cartographer")),
                 FORESTER);
+        VANILLA_TO_CUSTOM_PROFESSION_MAP.put(
+                RegistryKey.of(RegistryKeys.VILLAGER_PROFESSION, Identifier.ofVanilla("toolsmith")),
+                CRAFTER);
         // Add more mappings as needed
+    }
+
+    private static void registerCrafter() {
+        Set<Item> gatherableItems = new HashSet<>();
+        Set<Block> secondaryJobSites = new HashSet<>();
+        // Add items that crafters can gather
+
+        VillagerProfession crafter = new VillagerProfession(
+                Text.translatable(
+                        "entity." + CRAFTER.getValue().getNamespace() + ".villager." + CRAFTER.getValue().getPath()),
+                entry -> entry.matchesKey(PointOfInterestTypes.TOOLSMITH),
+                entry -> entry.matchesKey(PointOfInterestTypes.TOOLSMITH),
+                ImmutableSet.copyOf(gatherableItems),
+                ImmutableSet.copyOf(secondaryJobSites),
+                SoundEvents.ENTITY_VILLAGER_WORK_TOOLSMITH);
+
+        Registry.register(
+                Registries.VILLAGER_PROFESSION,
+                CRAFTER,
+                crafter);
+
+        MCSettlers.LOGGER.info("Registered custom profession: {}", CRAFTER.getValue().toString());
     }
 
     private static void registerForester() {

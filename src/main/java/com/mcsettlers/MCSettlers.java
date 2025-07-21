@@ -19,6 +19,7 @@ import com.mcsettlers.brains.ForesterBrain;
 import com.mcsettlers.brains.WoodcutterBrain;
 import com.mcsettlers.brains.WorkerBrain;
 import com.mcsettlers.brains.CarrierBrain;
+import com.mcsettlers.brains.CrafterBrain;
 
 public class MCSettlers implements ModInitializer {
 	public static final String MOD_ID = "mcsettlers";
@@ -27,6 +28,7 @@ public class MCSettlers implements ModInitializer {
 	private static final WorkerBrain woodcutterBrain = new WoodcutterBrain();
 	private static final WorkerBrain foresterBrain = new ForesterBrain();
 	private static final WorkerBrain carrierBrain = new CarrierBrain();
+	private static final WorkerBrain crafterBrain = new CrafterBrain();
 
 	public static String workerToString(VillagerEntity villager) {
 		VillagerData data = villager.getVillagerData();
@@ -46,6 +48,8 @@ public class MCSettlers implements ModInitializer {
 			return woodcutterBrain;
 		} else if (profession.matchesKey(ModProfessions.FORESTER)) {
 			return foresterBrain;
+		} else if (profession.matchesKey(ModProfessions.CRAFTER)) {
+			return crafterBrain;
 		}
 		return carrierBrain;
 	}
