@@ -364,6 +364,8 @@ public class WorkerBrain {
                 otherPositions.add(pos);
             }
         }
+        MCSettlers.LOGGER.info("[WorkerBrain] Found {} other deposit chests: {}", otherPositions.size(),
+                otherPositions.stream().map(BlockPos::toShortString).collect(Collectors.joining(", ")));
 
         int searchRadius = 10;
         for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, searchRadius)) {
@@ -373,6 +375,7 @@ public class WorkerBrain {
             }
             BlockState state = world.getBlockState(pos);
             if (state.isOf(Blocks.CHEST)) {
+                MCSettlers.LOGGER.info("[WorkerBrain] Found deposit chest at {}", pos.toShortString());
                 return Optional.of(pos);
             }
         }
@@ -402,7 +405,7 @@ public class WorkerBrain {
 
     protected void getBestToolFromChest(
         ServerWorld world,
-            ChestBlockEntity chest, VillagerEntity villager) {
+            ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
         // Find the best axe in the chest
         net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
         int bestToolIndex = -1;
@@ -553,7 +556,7 @@ public class WorkerBrain {
             }
         }
         // Then, select the best axe from the chest
-        getBestToolFromChest(world, chestEntity, villager);
+        getBestToolFromChest(world, chestEntity, villager, workstation);
 
         setJobStatus(villager, "stop_deposit_items");
 

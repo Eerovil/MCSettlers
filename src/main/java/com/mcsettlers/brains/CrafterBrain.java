@@ -7,13 +7,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import javax.swing.text.html.parser.Entity;
+
+import com.jcraft.jorbis.Block;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.AvailableRecipe;
 
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
-
+import net.minecraft.entity.decoration.BlockAttachedEntity;
+import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -23,6 +28,7 @@ import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.recipe.ServerRecipeManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 
 
 public class CrafterBrain extends WorkerBrain {
@@ -73,7 +79,7 @@ public class CrafterBrain extends WorkerBrain {
     @Override
     protected void getBestToolFromChest(
         ServerWorld world,
-            ChestBlockEntity chest, VillagerEntity villager) {
+            ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
         // Instead of getting a tool, we want to get the ingredients for crafting
 
         List<Item> itemsInChest = new ArrayList<>(0);
@@ -85,7 +91,7 @@ public class CrafterBrain extends WorkerBrain {
         }
         MCSettlers.LOGGER.info("CrafterBrain: Items in chest: " + itemsInChest);
 
-        for (AvailableRecipe availableRecipe : getAvailableRecipes(villager, world, villager.getBlockPos())) {
+        for (AvailableRecipe availableRecipe : getAvailableRecipes(villager, world, workstation)) {
             List<Item> neededItems = availableRecipe.itemsMatchRecipe(itemsInChest);
             if (neededItems == null) {
                 // If we don't have the needed items, we can't craft this recipe
@@ -113,8 +119,21 @@ public class CrafterBrain extends WorkerBrain {
     protected Item getItemToCraft(
             VillagerEntity villager, ServerWorld world,
             BlockPos workstation) {
+        // Check for item frame above workstation
+        BlockPos aboveWorkstation = workstation.up();
+        Iterable<ItemFrameEntity> entityCandidates = world.getEntitiesByClass(
+            ItemFrameEntity.class, new Box(aboveWorkstation), e -> true
+        );
+        for (ItemFrameEntity itemFrame : entityCandidates) {
+            ItemStack itemStack = itemFrame.getHeldItemStack();
+            if (!itemStack.isEmpty()) {
+                Item item = itemStack.getItem();
+                MCSettlers.LOGGER.info("CrafterBrain: Found item in frame: " + item);
+                return item; // Return the item found in the frame
+            }
+        }
 
-                return Items.OAK_PLANKS;
+        return Items.OAK_PLANKS;
     }
 
     protected Set<AvailableRecipe> getAvailableRecipes(

@@ -176,7 +176,7 @@ public class ForesterBrain extends WorkerBrain {
     @Override
     protected void getBestToolFromChest(
         ServerWorld world,
-            ChestBlockEntity chest, VillagerEntity villager) {
+            ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
         // Instead of getting a tool, we want to get a single sapling
         for (int i = 0; i < chest.size(); i++) {
             ItemStack stack = chest.getStack(i);
