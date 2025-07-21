@@ -2,6 +2,9 @@ package com.mcsettlers;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+
+import com.mcsettlers.utils.AvailableRecipe;
 
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.item.Item;
@@ -37,6 +40,10 @@ public class ModMemoryModules {
 
     public static final MemoryModuleType<Item> ITEM_IN_HAND = new MemoryModuleType<>(Optional.empty());
 
+    public static final MemoryModuleType<Set<Item>> WANTED_ITEMS = new MemoryModuleType<>(Optional.empty());
+
+    public static final MemoryModuleType<Set<AvailableRecipe>> AVAILABLE_RECIPES = new MemoryModuleType<>(Optional.empty());
+
     public static List<MemoryModuleType<?>> getAllMemoryModules() {
         return List.of(
                 JOB_STATUS,
@@ -50,7 +57,10 @@ public class ModMemoryModules {
                 ITEM_TO_CARRY,
                 JOB_WALK_TARGET,
                 JOB_WALK_FAILURE_COUNT,
-                ITEM_IN_HAND);
+                ITEM_IN_HAND,
+                WANTED_ITEMS,
+                AVAILABLE_RECIPES
+            );
     }
 
     public static void register() {
@@ -90,5 +100,11 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
                 Identifier.of("mcsettlers", "job_walk_failure_count"),
                 JOB_WALK_FAILURE_COUNT);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+                Identifier.of("mcsettlers", "wanted_items"),
+                WANTED_ITEMS);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+                Identifier.of("mcsettlers", "available_recipes"),
+                AVAILABLE_RECIPES);
     }
 }

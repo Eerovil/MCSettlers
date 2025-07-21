@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -24,6 +25,8 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -36,9 +39,30 @@ public class WorkerBrain {
     protected Optional<BlockState> TARGET_BLOCK_STATE = Optional.empty();
     protected Set<String> NON_AI_JOBS = ImmutableSet.of(
             "breaking");
-    // This worker wants these items in their chest
-    protected Set<TagKey<Item>> WANTED_ITEMS = ImmutableSet.of();
 
+    protected Set<TagKey<Item>> WANTED_ITEM_TAGS = ImmutableSet.of();
+
+    public Set<Item> getWantedItems(VillagerEntity villager) {
+        // Check memory for wanted items override
+        Optional<Set<Item>> optionalWantedItems = villager.getBrain().getOptionalMemory(ModMemoryModules.WANTED_ITEMS);
+        if (optionalWantedItems.isPresent()) {
+            return optionalWantedItems.get();
+        }
+        // If no override, return the default wanted items
+        return WANTED_ITEM_TAGS.stream()
+                .flatMap(tag -> tagKeyToItems(tag).stream())
+                .collect(Collectors.toSet());
+    }
+
+    protected Set<Item> tagKeyToItems(TagKey<Item> tag) {
+        Set<Item> items = new HashSet<>();
+
+        for (RegistryEntry<Item> entry : Registries.ITEM.iterateEntries(tag)) {
+            items.add(entry.value());
+        }
+        return items;
+    }
+    
     public void tick(VillagerEntity villager, ServerWorld world) {
         // Skip every other tick to reduce load
         if (world.getTime() % 2 != 0) {
@@ -355,7 +379,29 @@ public class WorkerBrain {
         return Optional.empty();
     }
 
+    protected ItemStack takeItemFromChest(
+            ChestBlockEntity chest, VillagerEntity villager, Item item) {
+        // Find the item in the chest and remove it
+        for (int i = 0; i < chest.size(); i++) {
+            ItemStack stack = chest.getStack(i);
+            if (stack.getItem() == item) {
+                // Remove the item from the chest
+                int count = stack.getCount();
+                if (count > 0) {
+                    stack.decrement(1); // Decrement by 1
+                    MCSettlers.LOGGER.info("CrafterBrain: Removed item {} from chest for crafting", item);
+                    ItemStack itemStack = new ItemStack(item, 1);
+                    villager.getInventory().addStack(itemStack);
+                    return itemStack; // Return the item stack
+                }
+            }
+        }
+        MCSettlers.LOGGER.warn("Item {} not found in chest", item);
+        return null;
+    }
+
     protected void getBestToolFromChest(
+        ServerWorld world,
             ChestBlockEntity chest, VillagerEntity villager) {
         // Find the best axe in the chest
         net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
@@ -507,7 +553,7 @@ public class WorkerBrain {
             }
         }
         // Then, select the best axe from the chest
-        getBestToolFromChest(chestEntity, villager);
+        getBestToolFromChest(world, chestEntity, villager);
 
         setJobStatus(villager, "stop_deposit_items");
 

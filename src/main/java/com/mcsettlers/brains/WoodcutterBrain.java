@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-
 import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
@@ -29,8 +28,9 @@ public class WoodcutterBrain extends WorkerBrain {
                 "breaking",
                 "pillaring",
                 "stopping_pillaring");
-        this.WANTED_ITEMS = ImmutableSet.of(
-                ItemTags.AXES);
+        this.WANTED_ITEM_TAGS = ImmutableSet.of(
+                ItemTags.AXES
+        );
     }
 
     // Raycast from villager to target block, return first log/leaf in the way

@@ -24,7 +24,7 @@ public class ForesterBrain extends WorkerBrain {
     // Implement Forester-specific behavior here
 
     public ForesterBrain() {
-        this.WANTED_ITEMS = ImmutableSet.of(
+        this.WANTED_ITEM_TAGS = ImmutableSet.of(
                 ItemTags.SAPLINGS);
     }
 
@@ -175,6 +175,7 @@ public class ForesterBrain extends WorkerBrain {
 
     @Override
     protected void getBestToolFromChest(
+        ServerWorld world,
             ChestBlockEntity chest, VillagerEntity villager) {
         // Instead of getting a tool, we want to get a single sapling
         for (int i = 0; i < chest.size(); i++) {

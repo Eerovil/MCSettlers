@@ -59,6 +59,7 @@ public class MCSettlers implements ModInitializer {
 		ModPOIs.register();
 		ModMemoryModules.register();
 		ModProfessions.register();
+		
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (ServerWorld world : server.getWorlds()) {

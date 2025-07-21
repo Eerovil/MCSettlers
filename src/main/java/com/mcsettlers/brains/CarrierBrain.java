@@ -17,9 +17,6 @@ import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
@@ -103,6 +100,8 @@ public class CarrierBrain extends WorkerBrain {
                 WorkerBrain workerBrain = MCSettlers.getBrainFor(otherVillager.getVillagerData().profession());
                 depositChestValues.wantedItems = new HashSet<>();
                 depositChestValues.containedItems = new HashSet<>();
+                Set<Item> otherVillgerWantedItems = workerBrain.getWantedItems(otherVillager);
+                MCSettlers.LOGGER.info("otherVillagerWantedItems: {}", otherVillgerWantedItems);
 
                 BlockEntity chest = world.getBlockEntity(depositChestValues.pos);
                 if (chest instanceof ChestBlockEntity) {
@@ -111,10 +110,8 @@ public class CarrierBrain extends WorkerBrain {
                         ItemStack stack = chestEntity.getStack(i);
                         if (stack.isEmpty()) {
                             // Add all items in WANTED_ITEMS to wantedItems, since there is emty slot
-                            for (TagKey<Item> wantedTag : workerBrain.WANTED_ITEMS) {
-                                for (RegistryEntry<Item> wantedItem : Registries.ITEM.iterateEntries(wantedTag)) {
-                                    depositChestValues.wantedItems.add(wantedItem.value());
-                                }
+                            for (Item wantedItem : otherVillgerWantedItems) {
+                                depositChestValues.wantedItems.add(wantedItem);
                             }
                             continue; // Skip empty slots
                         }
@@ -123,8 +120,8 @@ public class CarrierBrain extends WorkerBrain {
                         depositChestValues.containedItems.add(item);
 
                         // Check if the item is wanted by the worker brain
-                        for (TagKey<Item> wantedTag : workerBrain.WANTED_ITEMS) {
-                            if (stack.isIn(wantedTag)) {
+                        for (Item wantedItem : otherVillgerWantedItems) {
+                            if (stack.getItem() == wantedItem) {
                                 // If stack is not full, add to wanted items
                                 if (stack.getCount() < stack.getMaxCount()) {
                                     depositChestValues.wantedItems.add(item);
