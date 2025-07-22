@@ -98,7 +98,7 @@ public class CrafterBrain extends WorkerBrain {
             List<Item> neededItems = availableRecipe.itemsMatchRecipe(itemsInChest);
             if (neededItems == null) {
                 // If we don't have the needed items, we can't craft this recipe
-                MCSettlers.LOGGER.info("CrafterBrain: No needed items for recipe: " + availableRecipe);
+                // MCSettlers.LOGGER.info("CrafterBrain: No needed items for recipe: " + availableRecipe);
                 continue;
             }
             // We have the needed items, so we can craft this recipe
@@ -144,7 +144,7 @@ public class CrafterBrain extends WorkerBrain {
             ItemStack itemStack = itemFrame.getHeldItemStack();
             if (!itemStack.isEmpty()) {
                 Item item = itemStack.getItem();
-                MCSettlers.LOGGER.info("CrafterBrain: Found item in frame: " + item);
+                // MCSettlers.LOGGER.info("CrafterBrain: Found item in frame: " + item);
                 return item; // Return the item found in the frame
             }
         }
@@ -185,7 +185,7 @@ public class CrafterBrain extends WorkerBrain {
             availableRecipes.add(availableRecipe);
         }
 
-        MCSettlers.LOGGER.info("CrafterBrain: availableRecipes: " + availableRecipes);
+        // MCSettlers.LOGGER.info("CrafterBrain: availableRecipes: " + availableRecipes);
 
         return availableRecipes;
     }
@@ -241,7 +241,7 @@ public class CrafterBrain extends WorkerBrain {
                 }
             }
             brain.remember(ModMemoryModules.WANTED_ITEMS, wantedItems);
-            MCSettlers.LOGGER.info("CrafterBrain: refreshed crafting recipes for villager: " + MCSettlers.workerToString(villager));
+            // MCSettlers.LOGGER.info("CrafterBrain: refreshed crafting recipes for villager: " + MCSettlers.workerToString(villager));
         } else {
             MCSettlers.LOGGER.warn("CrafterBrain: no available recipes found for villager: " + MCSettlers.workerToString(villager));
         }
