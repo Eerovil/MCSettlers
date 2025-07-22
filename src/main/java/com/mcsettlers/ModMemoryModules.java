@@ -45,6 +45,7 @@ public class ModMemoryModules {
     public static final MemoryModuleType<Set<RegistryEntry<Item>>> WANTED_ITEMS = new MemoryModuleType<>(Optional.empty());
 
     public static final MemoryModuleType<Set<AvailableRecipe>> AVAILABLE_RECIPES = new MemoryModuleType<>(Optional.empty());
+    public static final MemoryModuleType<AvailableRecipe> SELECTED_RECIPE = new MemoryModuleType<>(Optional.empty());
 
     public static List<MemoryModuleType<?>> getAllMemoryModules() {
         return List.of(
@@ -61,7 +62,8 @@ public class ModMemoryModules {
                 JOB_WALK_FAILURE_COUNT,
                 ITEM_IN_HAND,
                 WANTED_ITEMS,
-                AVAILABLE_RECIPES
+                AVAILABLE_RECIPES,
+                SELECTED_RECIPE
             );
     }
 
@@ -108,5 +110,8 @@ public class ModMemoryModules {
         Registry.register(Registries.MEMORY_MODULE_TYPE,
                 Identifier.of("mcsettlers", "available_recipes"),
                 AVAILABLE_RECIPES);
+        Registry.register(Registries.MEMORY_MODULE_TYPE,
+                Identifier.of("mcsettlers", "selected_recipe"),
+                SELECTED_RECIPE);
     }
 }

@@ -79,7 +79,7 @@ public class CrafterBrain extends WorkerBrain {
         ServerWorld world,
             ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
         // Instead of getting a tool, we want to get the ingredients for crafting
-
+        Brain<?> brain = villager.getBrain();
         List<Item> itemsInChest = new ArrayList<>(0);
         for (int i = 0; i < chest.size(); i++) {
             ItemStack stack = chest.getStack(i);
@@ -88,8 +88,11 @@ public class CrafterBrain extends WorkerBrain {
             }
         }
         MCSettlers.LOGGER.info("CrafterBrain: Items in chest: " + itemsInChest);
+        brain.forget(ModMemoryModules.SELECTED_RECIPE);
 
-        for (AvailableRecipe availableRecipe : getAvailableRecipes(villager, world, workstation)) {
+        Set<AvailableRecipe> availableRecipes = brain.getOptionalMemory(ModMemoryModules.AVAILABLE_RECIPES).orElse(new HashSet<>());
+
+        for (AvailableRecipe availableRecipe : availableRecipes) {
             List<Item> neededItems = availableRecipe.itemsMatchRecipe(itemsInChest);
             if (neededItems == null) {
                 // If we don't have the needed items, we can't craft this recipe
@@ -98,6 +101,7 @@ public class CrafterBrain extends WorkerBrain {
             }
             // We have the needed items, so we can craft this recipe
             // Let's pick up all items in neededItems
+            brain.remember(ModMemoryModules.SELECTED_RECIPE, availableRecipe);
             for (Item item : neededItems) {
                 takeItemFromChest(chest, villager, item);
             }
@@ -109,8 +113,20 @@ public class CrafterBrain extends WorkerBrain {
             BlockPos workstation, Item itemToCraft) {
         MCSettlers.LOGGER.info("CrafterBrain: Crafting item: " + itemToCraft + " from items in inventory: " + villager.getInventory());
         // Clear inventory and add the item to craft
+        AvailableRecipe selectedRecipe = villager.getBrain().getOptionalMemory(ModMemoryModules.SELECTED_RECIPE).orElse(null);
+        if (selectedRecipe == null) {
+            MCSettlers.LOGGER.warn("CrafterBrain: No selected recipe found for villager: " + MCSettlers.workerToString(villager));
+            return false; // No recipe
+        }
+        ItemStack result = selectedRecipe.getResult();
+        if (result.isEmpty()) {
+            MCSettlers.LOGGER.warn("CrafterBrain: Result is empty for item: " + itemToCraft);
+            return false; // No result
+        }
+        // Clear the inventory
         villager.getInventory().clear();
-        villager.getInventory().addStack(new ItemStack(itemToCraft));
+        // Add the result to the inventory
+        villager.getInventory().addStack(result);
         return true; // Assume crafting is successful for now
     }
 
@@ -163,7 +179,7 @@ public class CrafterBrain extends WorkerBrain {
             
             CraftingRecipe recipe = recipeEntry.value();
 
-            AvailableRecipe availableRecipe = new AvailableRecipe(recipe);
+            AvailableRecipe availableRecipe = new AvailableRecipe(recipe, itemToCraft);
             availableRecipes.add(availableRecipe);
         }
 

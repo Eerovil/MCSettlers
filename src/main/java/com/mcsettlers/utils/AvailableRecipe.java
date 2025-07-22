@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.recipe.CraftingRecipe;
 import net.minecraft.recipe.Ingredient;
 import net.minecraft.recipe.IngredientPlacement;
@@ -29,9 +30,22 @@ class MyIngredient {
 
 public class AvailableRecipe {
     private final Set<MyIngredient> neededIngredients = new HashSet<>();
+    private CraftingRecipe recipe;
+    private Item itemToCraft;
+
+    public ItemStack getResult() {
+        try {
+            return recipe.craft(null, null);
+        } catch (Exception e) {
+            // Handle crafting exceptions
+            return new ItemStack(this.itemToCraft);
+        }
+    }
 
     @SuppressWarnings("deprecation")
-    public AvailableRecipe(CraftingRecipe recipe) {
+    public AvailableRecipe(CraftingRecipe recipe, Item itemToCraft) {
+        this.recipe = recipe;
+        this.itemToCraft = itemToCraft;
         // Get the ingredients from the recipe
         IngredientPlacement ingredients = recipe.getIngredientPlacement();
         for (Ingredient ingredient : ingredients.getIngredients()) {
