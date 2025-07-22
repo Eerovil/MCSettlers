@@ -12,4 +12,5 @@ public class DepositChestValues {
     public BlockPos pos;
     public Set<Item> wantedItems;
     public Set<Item> containedItems;
+    public int wantedItemsCount;
 }

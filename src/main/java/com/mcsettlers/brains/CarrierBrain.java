@@ -1,5 +1,6 @@
 package com.mcsettlers.brains;
 
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import com.mcsettlers.MCSettlers;
@@ -83,13 +84,21 @@ public class CarrierBrain extends WorkerBrain {
 
         BlockPos villagerPos = villager.getBlockPos();
 
-        PriorityQueue<DepositChestValues> queue = sharedMemories.getDepositChestValuesNear(world, villagerPos);
+        PriorityQueue<DepositChestValues> nearChests = sharedMemories.getDepositChestValuesNear(world, villagerPos, 
+                Comparator.comparingDouble(p -> p.pos.getSquaredDistance(villagerPos)));
+
+        Comparator<DepositChestValues> comparator = Comparator.comparingDouble(
+            p -> p.wantedItemsCount + Math.exp(p.pos.getSquaredDistance(villagerPos) / (16.0 * 16.0))
+        );
+        // This one prioritizes lower p.wantedItemsCount, except when distance gets too high
+        PriorityQueue<DepositChestValues> emptyNearChests = sharedMemories.getDepositChestValuesNear(world, villagerPos,
+                comparator);
 
         Brain<?> brain = villager.getBrain();
-        MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", queue.size(), MCSettlers.workerToString(villager));
+        MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", nearChests.size(), MCSettlers.workerToString(villager));
         // Print values for each deposit chest
-        for (DepositChestValues chestValuesFrom : queue) {
-            for (DepositChestValues chestValuesTo : queue) {
+        for (DepositChestValues chestValuesFrom : nearChests) {
+            for (DepositChestValues chestValuesTo : emptyNearChests) {
                 // If same chest, skip
                 if (chestValuesFrom.pos.equals(chestValuesTo.pos)) {
                     continue;

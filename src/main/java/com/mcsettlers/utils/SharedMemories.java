@@ -163,6 +163,7 @@ public class SharedMemories {
                         // Check if the item is wanted by the worker brain
                         for (Item wantedItem : otherVillagerWantedItems) {
                             if (stack.getItem() == wantedItem) {
+                                depositChestValues.wantedItemsCount += stack.getCount();
                                 // If stack is not full, add to wanted items
                                 if (stack.getCount() < stack.getMaxCount()) {
                                     depositChestValues.wantedItems.add(item);
@@ -183,10 +184,9 @@ public class SharedMemories {
         MCSettlers.LOGGER.info("Refreshed deposit chest values: {}", depositChestValuesList.size());
     }
 
-    public PriorityQueue<DepositChestValues> getDepositChestValuesNear(ServerWorld world, BlockPos pos) {
+    public PriorityQueue<DepositChestValues> getDepositChestValuesNear(ServerWorld world, BlockPos pos, Comparator<DepositChestValues> sortFunc) {
         MCSettlers.LOGGER.info("Getting deposit chest values near {}, size: {}", pos.toShortString(), depositChestValuesList.size());
-        PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(
-                Comparator.comparingDouble(p -> p.pos.getSquaredDistance(pos)));
+        PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(sortFunc);
         for (DepositChestValues depositChestValues : depositChestValuesList) {
             queue.add(depositChestValues);
         }
