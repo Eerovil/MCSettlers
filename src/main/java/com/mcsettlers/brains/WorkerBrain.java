@@ -8,7 +8,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableSet;
-
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.ChestAnimationHelper;
@@ -28,6 +27,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -44,12 +44,17 @@ public class WorkerBrain {
 
     protected Set<TagKey<Item>> WANTED_ITEM_TAGS = ImmutableSet.of();
 
-    public Set<Item> getWantedItems(VillagerEntity villager) {
+    public Set<Item> getWantedItems(ServerWorld world, VillagerEntity villager, SharedMemories sharedMemories) {
         // Check memory for wanted items override
         Optional<Set<RegistryEntry<Item>>> optionalWantedItems = villager.getBrain().getOptionalMemory(ModMemoryModules.WANTED_ITEMS);
         if (optionalWantedItems.isPresent()) {
             return optionalWantedItems.get().stream().map(RegistryEntry::value).collect(Collectors.toSet());
         }
+
+        if (TARGET_BLOCK_STATE.isPresent()) {
+            return betterToolsThanCurrent(world, villager, sharedMemories);
+        }
+
         // If no override, return the default wanted items
         return WANTED_ITEM_TAGS.stream()
                 .flatMap(tag -> tagKeyToItems(tag).stream())
@@ -460,14 +465,79 @@ public class WorkerBrain {
         return null;
     }
 
-    protected void getBestToolFromChest(
+    public boolean itemIsTool(Item item) {
+        if (item == null) {
+            return false;
+        }
+        Set<TagKey<Item>> toolTags = Set.of(
+            ItemTags.AXES,
+            ItemTags.PICKAXES,
+            ItemTags.SHOVELS,
+            ItemTags.HOES,
+            ItemTags.SWORDS,
+            ItemTags.EQUIPPABLE_ENCHANTABLE
+        );
+        ItemStack itemStack = new ItemStack(item);
+        for (TagKey<Item> tag : toolTags) {
+            if (itemStack.isIn(tag)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected Set<Item> betterToolsThanCurrent(
+            ServerWorld world, VillagerEntity villager, SharedMemories sharedMemories
+    ) {
+        BlockPos workstation = villager.getBrain().getOptionalMemory(MemoryModuleType.JOB_SITE)
+                .map(GlobalPos::pos)
+                .orElse(null);
+        Item currentTool = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND).getItem();
+        float currentToolSpeed = new ItemStack(currentTool).getMiningSpeedMultiplier(TARGET_BLOCK_STATE.orElse(null));
+
+        BlockPos depositChest = getDepositChest(villager, world, workstation, sharedMemories)
+                .orElse(null);
+        if (depositChest != null) {
+            ChestBlockEntity chest = (ChestBlockEntity) world.getBlockEntity(depositChest);
+            if (chest != null) {
+                Item bestToolInChest = selectBestToolFromChest(world, chest, villager, workstation)
+                        .orElse(null);
+                if (bestToolInChest != null) {
+                    float bestToolInChestSpeed = new ItemStack(bestToolInChest).getMiningSpeedMultiplier(TARGET_BLOCK_STATE.orElse(null));
+                    if (bestToolInChestSpeed > currentToolSpeed) {
+                        currentToolSpeed = bestToolInChestSpeed;
+                    }
+                }
+            }
+        }
+        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} current tool speed: {}",
+                MCSettlers.workerToString(villager), currentToolSpeed);
+        Set<Item> betterTools = new HashSet<>();
+        for (TagKey<Item> tag : WANTED_ITEM_TAGS) {
+            for (RegistryEntry<Item> entry : Registries.ITEM.iterateEntries(tag)) {
+                Item item = entry.value();
+                if (item == null || item == Items.AIR) {
+                    continue; // Skip air items
+                }
+                ItemStack itemStack = new ItemStack(item);
+                if (itemStack.getMiningSpeedMultiplier(TARGET_BLOCK_STATE.orElse(null)) > currentToolSpeed) {
+                    // If the item is not the current tool and is better than it
+                    betterTools.add(item);
+                }
+            }
+        }
+        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found better tools than current: {}",
+                MCSettlers.workerToString(villager), betterTools.stream().map(Item::toString).collect(Collectors.joining(", ")));
+        return betterTools;
+    }
+
+    protected Optional<Item> selectBestToolFromChest(
         ServerWorld world,
             ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
-        // Find the best axe in the chest
+            
         net.minecraft.item.ItemStack bestAxe = net.minecraft.item.ItemStack.EMPTY;
-        int bestToolIndex = -1;
         if (TARGET_BLOCK_STATE.isEmpty()) {
-            return;
+            return Optional.empty(); // No target block state set, cannot find best tool
         }
         BlockState targetBlockState = TARGET_BLOCK_STATE.get();
 
@@ -478,18 +548,32 @@ public class WorkerBrain {
                 continue; // Not an axe or not effective
             if (bestAxe.isEmpty() || miningSpeed > bestAxe.getMiningSpeedMultiplier(targetBlockState)) {
                 bestAxe = stack;
-                bestToolIndex = i;
             }
         }
+
         if (!bestAxe.isEmpty()) {
-            // Set the best axe in the villager's hand
-            MCSettlers.LOGGER.info("[WorkerBrain] Villager {} took best axe from chest: {}", MCSettlers.workerToString(villager),
-                    bestAxe);
-            // Remove the axe from the chest
-            chest.setStack(bestToolIndex, net.minecraft.item.ItemStack.EMPTY);
-            villager.getInventory().addStack(bestAxe);
-            startHoldingItem(villager, bestAxe);
+            return Optional.of(bestAxe.getItem());
         }
+        return Optional.empty();
+    }
+
+    protected void getBestToolFromChest(
+        ServerWorld world,
+            ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
+        // Find the best axe in the chest
+        Optional<Item> optionalBestAxe = selectBestToolFromChest(world, chest, villager, workstation);
+        if (optionalBestAxe.isEmpty()) {
+            MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found no better axe than in chest.",
+                    MCSettlers.workerToString(villager));
+            return; // No better axe found, nothing to do
+        }
+        Item bestAxe = optionalBestAxe.get();
+        // Set the best axe in the villager's hand
+        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} took best axe from chest: {}", MCSettlers.workerToString(villager),
+                bestAxe);
+        // Remove the axe from the chest
+        takeItemFromChest(chest, villager, bestAxe);
+        startHoldingItem(villager, bestAxe);
     }
 
     protected boolean addStackToChest(

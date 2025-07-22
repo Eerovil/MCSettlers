@@ -2,8 +2,10 @@ package com.mcsettlers.brains;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -12,6 +14,7 @@ import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.AvailableRecipe;
 import com.mcsettlers.utils.SharedMemories;
 
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
 import net.minecraft.entity.decoration.ItemFrameEntity;
@@ -87,7 +90,6 @@ public class CrafterBrain extends WorkerBrain {
                 itemsInChest.add(stack.getItem());
             }
         }
-        MCSettlers.LOGGER.info("CrafterBrain: Items in chest: " + itemsInChest);
         brain.forget(ModMemoryModules.SELECTED_RECIPE);
 
         Set<AvailableRecipe> availableRecipes = brain.getOptionalMemory(ModMemoryModules.AVAILABLE_RECIPES).orElse(new HashSet<>());
@@ -188,6 +190,29 @@ public class CrafterBrain extends WorkerBrain {
         return availableRecipes;
     }
 
+    private Map<Item, Integer> getItemCountInDepositChest(
+            ServerWorld world, VillagerEntity villager) {
+        Map<Item, Integer> itemCountMap = new HashMap<>();
+        BlockPos depositChestPos = villager.getBrain().getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST)
+            .orElse(null);
+
+        if (depositChestPos == null) {
+            MCSettlers.LOGGER.warn("CrafterBrain: No deposit chest found for villager: " + MCSettlers.workerToString(villager));
+            return itemCountMap; // No deposit chest, return empty map
+        }
+
+        BlockEntity blockEntity = world.getBlockEntity(depositChestPos);
+        if (blockEntity instanceof ChestBlockEntity chest) {
+            for (int i = 0; i < chest.size(); i++) {
+                ItemStack stack = chest.getStack(i);
+                if (!stack.isEmpty()) {
+                    itemCountMap.merge(stack.getItem(), stack.getCount(), Integer::sum);
+                }
+            }
+        }
+        return itemCountMap;
+    }
+
     private void refreshCraftingRecipes(
             VillagerEntity villager, ServerWorld world, BlockPos workstation) {
 
@@ -195,10 +220,24 @@ public class CrafterBrain extends WorkerBrain {
         Set<AvailableRecipe> newAvailableRecipes = getAvailableRecipes(villager, world, workstation);
         if (newAvailableRecipes != null) {
             brain.remember(ModMemoryModules.AVAILABLE_RECIPES, newAvailableRecipes);
+            // Count how many items are already in chest
+            Map<Item, Integer> itemCountInDepositChest = getItemCountInDepositChest(world, villager);
             Set<RegistryEntry<Item>> wantedItems = new HashSet<>();
             for (AvailableRecipe recipe : newAvailableRecipes) {
                 for (Item item : recipe.getWantedItems()) {
+                    // If we already have 10 of this item in the deposit chest, we don't want it
+                    // Unless the wanted items will be empty
+                    if (itemCountInDepositChest.getOrDefault(item, 0) >= 10) {
+                        continue; // Skip this item
+                    }
                     wantedItems.add(Registries.ITEM.getEntry(item));
+                }
+            }
+            if (wantedItems.isEmpty()) {
+                for (AvailableRecipe recipe : newAvailableRecipes) {
+                    for (Item item : recipe.getWantedItems()) {
+                        wantedItems.add(Registries.ITEM.getEntry(item));
+                    }
                 }
             }
             brain.remember(ModMemoryModules.WANTED_ITEMS, wantedItems);

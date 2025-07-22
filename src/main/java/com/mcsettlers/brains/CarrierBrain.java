@@ -28,6 +28,15 @@ public class CarrierBrain extends WorkerBrain {
     }
 
     @Override
+    protected void getBestToolFromChest(
+        ServerWorld world,
+            ChestBlockEntity chest, VillagerEntity villager, BlockPos workstation) {
+        // This method is overridden to not select a tool from the chest
+        // Carrier does not use tools, so we can skip this logic
+        MCSettlers.LOGGER.warn("[CarrierBrain] Will not pick a tool from the chest, as carrier does not use tools.");
+    }
+
+    @Override
     protected void handleJob(
             VillagerEntity villager, ServerWorld world,
             String jobStatus, BlockPos workstation, BlockPos targetBlock, SharedMemories sharedMemories) {

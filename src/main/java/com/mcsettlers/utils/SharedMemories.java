@@ -124,7 +124,7 @@ public class SharedMemories {
         return depositChestsMap;
     }
 
-    public void refreshDepositChestValues(MinecraftServer server) {
+    public void refreshDepositChestValues(MinecraftServer server, SharedMemories sharedMemories) {
         // This method should refresh the deposit chest values from the world
         // For now, it's a placeholder
         // In a real implementation, you would query the world for all deposit chests and their contents
@@ -135,6 +135,9 @@ public class SharedMemories {
             for (Map.Entry<BlockPos, VillagerEntity> entry : depositChestsInWorld(world).entrySet()) {
                 BlockPos chestPos = entry.getKey();
                 VillagerEntity otherVillager = entry.getValue();
+                if (otherVillager == null || !otherVillager.isAlive()) {
+                    continue; // Skip if the villager is not alive
+                }
 
                 DepositChestValues depositChestValues = new DepositChestValues();
                 depositChestValues.dimension = world.getRegistryKey();
@@ -142,7 +145,9 @@ public class SharedMemories {
                 WorkerBrain workerBrain = MCSettlers.getBrainFor(otherVillager.getVillagerData().profession());
                 depositChestValues.wantedItems = new HashSet<>();
                 depositChestValues.containedItems = new HashSet<>();
-                Set<Item> otherVillagerWantedItems = workerBrain.getWantedItems(otherVillager);
+                Set<Item> otherVillagerWantedItems = workerBrain.getWantedItems(
+                    world, otherVillager, sharedMemories
+                ); // Get wanted items from the worker brain
 
                 BlockEntity chest = world.getBlockEntity(depositChestValues.pos);
                 if (chest instanceof ChestBlockEntity) {
@@ -174,6 +179,8 @@ public class SharedMemories {
                     }
                 } else {
                     MCSettlers.LOGGER.warn("Deposit chest at {} is not a ChestBlockEntity", depositChestValues.pos);
+                    unReserveDepositChest(world, chestPos);
+                    continue;
                 }
                 // Delete all wanted items from contained items
                 depositChestValues.containedItems.removeAll(depositChestValues.wantedItems);
