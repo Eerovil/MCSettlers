@@ -29,6 +29,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
@@ -100,6 +101,15 @@ public class WorkerBrain {
             jobStatus = "idle"; // Update local variable to avoid repeated lookups
         }
 
+        Optional<GlobalPos> potentialJobSite = brain.getOptionalMemory(MemoryModuleType.POTENTIAL_JOB_SITE);
+
+        if (potentialJobSite.isPresent() && (jobStatus.startsWith("no_work") || jobStatus.equals("idle"))) {
+            // Worker is about to take a break, so forget the current jobs
+            villager.setAiDisabled(false);
+            setJobStatus(villager, "no_work_new_job");
+            return;
+        }
+
         Optional<Long> pauseUntil = brain.getOptionalMemory(ModMemoryModules.PAUSE_EVERYTHING_UNTIL);
         if (pauseUntil != null && pauseUntil.isPresent()) {
             long now = world.getTime();
@@ -152,7 +162,12 @@ public class WorkerBrain {
     protected void startHoldingItem(
             VillagerEntity villager, ItemStack itemStack) {
         villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, itemStack);
-        villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, Registries.ITEM.getEntry(itemStack.getItem()));
+        if (itemStack.isEmpty() || itemStack.getItem() == Items.AIR) {
+            // Forget the item in hand memory if the item is empty or air
+            villager.getBrain().forget(ModMemoryModules.ITEM_IN_HAND);
+        } else {
+            villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, Registries.ITEM.getEntry(itemStack.getItem()));
+        }
     }
 
     protected void startHoldingItem(
@@ -191,7 +206,7 @@ public class WorkerBrain {
             villager.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, ItemStack.EMPTY);
             MCSettlers.LOGGER.info("[WorkerBrain] Villager {} could not find item {} in inventory, clearing hand.",
                     MCSettlers.workerToString(villager), itemInHand);
-            villager.getBrain().remember(ModMemoryModules.ITEM_IN_HAND, Registries.ITEM.getEntry(Items.AIR));
+            villager.getBrain().forget(ModMemoryModules.ITEM_IN_HAND); // Forget the item in hand memory
         }
         // No item in hand memory, make sure the villager is not holding anything
         // If they are
@@ -357,7 +372,20 @@ public class WorkerBrain {
 
     protected void setJobStatus(VillagerEntity villager, String status) {
         villager.getBrain().remember(ModMemoryModules.JOB_STATUS, status);
-        villager.setCustomName(net.minecraft.text.Text.of(status));
+        Text customName = Text.of(status);
+        // Add villager's workstation position to the custom name
+        Optional<GlobalPos> optionalWorkstation = villager.getBrain().getOptionalMemory(MemoryModuleType.JOB_SITE);
+        if (optionalWorkstation.isPresent()) {
+            GlobalPos workstation = optionalWorkstation.get();
+            customName = Text.of(status + " at " + workstation.pos().toShortString());
+            // Add villager's deposit chest position to the custom name
+            Optional<BlockPos> optionalDepositChest = villager.getBrain().getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+            if (optionalDepositChest.isPresent()) {
+                BlockPos depositChest = optionalDepositChest.get();
+                customName = Text.of(customName.getString() + " (deposit at " + depositChest.toShortString() + ")");
+            }
+        }
+        villager.setCustomName(customName);
         villager.setCustomNameVisible(true);
         MCSettlers.LOGGER.info("[WorkerBrain] Set job status to " + status + " for villager "
                 + MCSettlers.workerToString(villager));

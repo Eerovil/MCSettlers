@@ -216,25 +216,30 @@ public class WoodcutterBrain extends WorkerBrain {
     }
 
     private void keepBreakingBlock(
-            VillagerEntity villager, ServerWorld world, BlockPos targetLog, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos targetBlock, BlockPos workstation) {
         // Continue breaking logic
         Brain<?> brain = villager.getBrain();
+        boolean isAir = world.getBlockState(targetBlock).isAir();
         Float breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0f);
         // Animate breaking progress (0-10)
-        world.setBlockBreakingInfo(villager.getId(), targetLog, Math.round(breakProgress));
+        if (!isAir) {
+            world.setBlockBreakingInfo(villager.getId(), targetBlock, Math.round(breakProgress));
+        }
         // Look at the block
-        lookAtBlock(villager, targetLog);
+        lookAtBlock(villager, targetBlock);
 
         if (breakProgress < 10) {
-            int ticksToBreak = blockBreakTime(targetLog, villager);
+            int ticksToBreak = blockBreakTime(targetBlock, villager);
             float progressPerTick = 10f / ticksToBreak;
             brain.remember(ModMemoryModules.BREAK_PROGRESS, breakProgress + progressPerTick);
         } else {
-            System.out.println("[WoodcutterBrain] Actually breaking block at " + targetLog.toShortString());
+            System.out.println("[WoodcutterBrain] Actually breaking block " + world.getBlockState(targetBlock) + " at " + targetBlock.toShortString());
             boolean currentlyPillaring = brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).isPresent()
                     && brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).get().size() > 0;
-            world.breakBlock(targetLog, !currentlyPillaring, villager);
-            world.setBlockBreakingInfo(villager.getId(), targetLog, -1); // clear animation
+            if (!isAir) {
+                world.breakBlock(targetBlock, !currentlyPillaring, villager);
+                world.setBlockBreakingInfo(villager.getId(), targetBlock, -1); // clear animation
+            }
 
             brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
             brain.forget(ModMemoryModules.BREAK_PROGRESS);
@@ -475,7 +480,11 @@ public class WoodcutterBrain extends WorkerBrain {
         Brain<?> brain = villager.getBrain();
         List<BlockPos> pillarBlocks = brain.getOptionalMemory(ModMemoryModules.PILLAR_BLOCKS).orElse(null);
         if (pillarBlocks != null && !pillarBlocks.isEmpty()) {
+            // Make a copy of the list to not be immutable
+            pillarBlocks = new ArrayList<>(pillarBlocks);
             BlockPos lastBlock = pillarBlocks.remove(pillarBlocks.size() - 1);
+            // Update the memory with the new list
+            brain.remember(ModMemoryModules.PILLAR_BLOCKS, pillarBlocks);
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, lastBlock);
             // Move villager to the last block
             villager.setPos(villager.getX(), lastBlock.getY() + 1, villager.getZ());
