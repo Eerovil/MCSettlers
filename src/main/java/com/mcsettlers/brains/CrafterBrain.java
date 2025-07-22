@@ -10,6 +10,7 @@ import java.util.Set;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.AvailableRecipe;
+import com.mcsettlers.utils.SharedMemories;
 
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.ai.brain.Brain;
@@ -34,15 +35,15 @@ public class CrafterBrain extends WorkerBrain {
     @Override
     protected void handleJob(
         VillagerEntity villager, ServerWorld world,
-        String jobStatus, BlockPos workstation, BlockPos targetBlock) {
+        String jobStatus, BlockPos workstation, BlockPos targetBlock, SharedMemories sharedMemories) {
 
         Brain<?> brain = villager.getBrain();
 
         if (jobStatus.equals("refresh_crafting_recipe")) {
             refreshCraftingRecipes(villager, world, workstation);
-            startDepositingItems(villager, world, workstation);
+            startDepositingItems(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("deposit_items")) {
-            keepDepositingItems(villager, world, workstation);
+            keepDepositingItems(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
@@ -53,7 +54,7 @@ public class CrafterBrain extends WorkerBrain {
                 craftItem(villager, world, workstation, getItemToCraft(villager, world, workstation));
                 setJobStatus(villager, "crafting");
                 pauseForMS(villager, world, 5000);
-                startDepositingItems(villager, world, workstation);
+                startDepositingItems(villager, world, workstation, sharedMemories);
             }
         } else if (jobStatus.startsWith("no_work")) {
             startHoldingItem(villager, ItemStack.EMPTY);

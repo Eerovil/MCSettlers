@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import com.mcsettlers.brains.ForesterBrain;
 import com.mcsettlers.brains.WoodcutterBrain;
 import com.mcsettlers.brains.WorkerBrain;
+import com.mcsettlers.utils.SharedMemories;
 import com.mcsettlers.brains.CarrierBrain;
 import com.mcsettlers.brains.CrafterBrain;
 
@@ -29,6 +30,8 @@ public class MCSettlers implements ModInitializer {
 	private static final WorkerBrain foresterBrain = new ForesterBrain();
 	private static final WorkerBrain carrierBrain = new CarrierBrain();
 	private static final WorkerBrain crafterBrain = new CrafterBrain();
+
+	public static SharedMemories sharedMemories = new SharedMemories();
 
 	public static String workerToString(VillagerEntity villager) {
 		VillagerData data = villager.getVillagerData();
@@ -88,7 +91,7 @@ public class MCSettlers implements ModInitializer {
 											customKey.getValue());
 									WorkerBrain brain = getBrainFor(customEntry);
 									if (brain != null) {
-										brain.initCustomBrain(villager, world);
+										brain.initCustomBrain(villager, world, sharedMemories);
 									}
 								}
 							}
@@ -96,7 +99,7 @@ public class MCSettlers implements ModInitializer {
 					}
 					WorkerBrain brain = getBrainFor(profession);
 					if (brain != null) {
-						brain.tick(villager, world); // Calls the appropriate brain's tick method
+						brain.tick(villager, world, sharedMemories); // Calls the appropriate brain's tick method
 					}
 				}
 			}

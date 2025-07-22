@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
+import com.mcsettlers.utils.SharedMemories;
 
 public class WoodcutterBrain extends WorkerBrain {
     public WoodcutterBrain() {
@@ -36,6 +37,9 @@ public class WoodcutterBrain extends WorkerBrain {
     // Raycast from villager to target block, return first log/leaf in the way
     // (excluding target)
     private BlockPos getObstructingLogOrLeaf(VillagerEntity villager, ServerWorld world, BlockPos target) {
+        if (target == null) {
+            return null; // No target to check
+        }
         Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
         Vec3d targetCenter = Vec3d.ofCenter(target);
         Vec3d dir = targetCenter.subtract(eyePos).normalize();
@@ -68,7 +72,7 @@ public class WoodcutterBrain extends WorkerBrain {
     @Override
     protected void handleJob(
             VillagerEntity villager, ServerWorld world,
-            String jobStatus, BlockPos workstation, BlockPos targetLog) {
+            String jobStatus, BlockPos workstation, BlockPos targetLog, SharedMemories sharedMemories) {
 
         Brain<?> brain = villager.getBrain();
 
@@ -76,20 +80,20 @@ public class WoodcutterBrain extends WorkerBrain {
             if (!reallyReachedTarget(world, villager)) {
                 return; // Already walking, nothing to do
             }
-            startBreakingBlock(villager, world, targetLog);
+            startBreakingBlock(villager, world, targetLog, sharedMemories);
         } else if (jobStatus.equals("breaking")) {
-            keepBreakingBlock(villager, world, targetLog, workstation);
+            keepBreakingBlock(villager, world, targetLog, workstation, sharedMemories);
         } else if (jobStatus.equals("idle")) {
             // If idle, we can search for logs
-            findNewTarget(villager, world, workstation);
+            findNewTarget(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("pillaring")) {
-            keepPillaring(villager, world, targetLog);
+            keepPillaring(villager, world, targetLog, sharedMemories);
         } else if (jobStatus.equals("stopping_pillaring")) {
-            keepStoppingPillaring(villager, world, targetLog);
+            keepStoppingPillaring(villager, world, targetLog, sharedMemories);
         } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
         } else if (jobStatus.equals("deposit_items")) {
-            keepDepositingItems(villager, world, workstation);
+            keepDepositingItems(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
         } else if (jobStatus.startsWith("no_work")) {
@@ -105,8 +109,8 @@ public class WoodcutterBrain extends WorkerBrain {
                 if (world.getRandom().nextBoolean()) {
                     setJobStatus(villager, "idle");
                 } else {
-                    if (anyItemsToDeposit(villager) && getDepositChest(villager, world, workstation).isPresent()) {
-                        startDepositingItems(villager, world, workstation);
+                    if (anyItemsToDeposit(villager) && getDepositChest(villager, world, workstation, sharedMemories).isPresent()) {
+                        startDepositingItems(villager, world, workstation, sharedMemories);
                     } else {
                         setJobStatus(villager, "picking_up_blocks");
                     }
@@ -127,15 +131,20 @@ public class WoodcutterBrain extends WorkerBrain {
         }
     }
 
-    protected void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation) {
+    protected void findNewTarget(VillagerEntity villager, ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
         int searchRadius = 20;
         BlockPos villagerPos = villager.getBlockPos();
-        BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius);
+        BlockPos[] found = findNearbyLogAndApproach(world, villagerPos, workstation, searchRadius, sharedMemories);
         BlockPos foundLog = found != null ? found[0] : null;
         BlockPos foundApproach = found != null ? found[1] : null;
         if (foundLog != null) {
             MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + foundLog.toShortString()
                     + ", approach at " + foundApproach.toShortString());
+            if (!sharedMemories.reserveTargetBlock(world, villager, foundLog)) {
+                MCSettlers.LOGGER.warn("[WoodcutterBrain] Target block already reserved: " + foundLog.toShortString());
+                setJobStatus(villager, "no_work_target_reserved");
+                return; // Target block already reserved
+            }
             villager.getBrain().remember(ModMemoryModules.TARGET_BREAK_BLOCK, foundLog);
             
             // Ensure approach is walkable (not inside block, on ground)
@@ -147,7 +156,7 @@ public class WoodcutterBrain extends WorkerBrain {
             // If walk target is close enough, start breaking
             double distSq = villager.squaredDistanceTo(Vec3d.ofCenter(walkableApproach));
             if (distSq < 3 * 3) {
-                startBreakingBlock(villager, world, foundLog);
+                startBreakingBlock(villager, world, foundLog, sharedMemories);
                 return;
             }
             walkToPosition(villager, world, walkableApproach, 0.6F);
@@ -161,7 +170,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
     private void startBreakingBlock(
             VillagerEntity villager, ServerWorld world,
-            BlockPos targetLog) {
+            BlockPos targetLog, SharedMemories sharedMemories) {
 
         Brain<?> brain = villager.getBrain();
 
@@ -190,6 +199,7 @@ public class WoodcutterBrain extends WorkerBrain {
                         + String.format("%.2f", dist) + ")");
 
                 brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+                sharedMemories.unReserveTargetBlock(world, targetLog);
                 brain.forget(ModMemoryModules.BREAK_PROGRESS);
                 setJobStatus(villager, "no_work_too_far_from_log");
                 return;
@@ -216,9 +226,14 @@ public class WoodcutterBrain extends WorkerBrain {
     }
 
     private void keepBreakingBlock(
-            VillagerEntity villager, ServerWorld world, BlockPos targetBlock, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos targetBlock, BlockPos workstation, SharedMemories sharedMemories) {
         // Continue breaking logic
         Brain<?> brain = villager.getBrain();
+        if (targetBlock == null) {
+            MCSettlers.LOGGER.warn("[WoodcutterBrain] No target block to break, resetting job status.");
+            setJobStatus(villager, "no_work_no_target_block");
+            return; // No target block to break
+        }
         boolean isAir = world.getBlockState(targetBlock).isAir();
         Float breakProgress = brain.getOptionalMemory(ModMemoryModules.BREAK_PROGRESS).orElse(0f);
         // Animate breaking progress (0-10)
@@ -242,6 +257,7 @@ public class WoodcutterBrain extends WorkerBrain {
             }
 
             brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+            sharedMemories.unReserveTargetBlock(world, targetBlock);
             brain.forget(ModMemoryModules.BREAK_PROGRESS);
             // if pillaring, keep pillaring
             if (currentlyPillaring) {
@@ -260,7 +276,7 @@ public class WoodcutterBrain extends WorkerBrain {
                     }
                 }
                 if (itemCount > 10) {
-                    startDepositingItems(villager, world, workstation);
+                    startDepositingItems(villager, world, workstation, sharedMemories);
                 } else {
                     setJobStatus(villager, "idle");
                 }
@@ -272,6 +288,9 @@ public class WoodcutterBrain extends WorkerBrain {
         // Check if the target log is accessible (not obstructed by blocks)
         // This is a placeholder; actual implementation would depend on game logic
         // For now, we assume all logs are accessible
+        if (targetLog == null) {
+            return null; // No target log to check
+        }
         BlockState state = world.getBlockState(targetLog);
         if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
 
@@ -294,7 +313,8 @@ public class WoodcutterBrain extends WorkerBrain {
             ServerWorld world,
             BlockPos villagerFeetPos,
             BlockPos workstation,
-            int radius) {
+            int radius,
+            SharedMemories sharedMemories) {
         int r2 = radius * radius;
         BlockPos villagerPos = villagerFeetPos.up();
         HashMap<BlockPos, Boolean> handledCoords = new HashMap<>();
@@ -304,6 +324,9 @@ public class WoodcutterBrain extends WorkerBrain {
             handledCoords.put(pos, true);
             if (state.isIn(BlockTags.LOGS) || state.isIn(BlockTags.LEAVES)) {
                 if (workstation.getSquaredDistance(pos) <= r2) {
+                    if (!sharedMemories.targetBlockIsAvailable(world, pos)) {
+                        return false; // Only consider positions not already reserved
+                    }
                     return true; // Only consider positions within the radius
                 }
             }
@@ -378,7 +401,7 @@ public class WoodcutterBrain extends WorkerBrain {
     }
 
     private void keepPillaring(
-            VillagerEntity villager, ServerWorld world, BlockPos targetLog) {
+            VillagerEntity villager, ServerWorld world, BlockPos targetLog, SharedMemories sharedMemories) {
 
         // Only run this every 20 ticks
         if (villager.getWorld().getTime() % 20 != 0) {
@@ -418,11 +441,14 @@ public class WoodcutterBrain extends WorkerBrain {
                     continue;
                 }
             }
+            if (!sharedMemories.reserveTargetBlock(world, villager, villagerPos) || !sharedMemories.reserveTargetBlock(world, villager, pos)) {
+                continue;
+            }
 
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, pos);
             MCSettlers.LOGGER.info("[WoodcutterBrain] Found log at " + pos.toShortString()
                     + " while pillaring up to log at " + targetLog.toShortString());
-            startBreakingBlock(villager, world, targetLog);
+            startBreakingBlock(villager, world, targetLog, sharedMemories);
             return;
         }
 
@@ -473,7 +499,7 @@ public class WoodcutterBrain extends WorkerBrain {
     }
 
     public void keepStoppingPillaring(
-            VillagerEntity villager, ServerWorld world, BlockPos targetLog) {
+            VillagerEntity villager, ServerWorld world, BlockPos targetLog, SharedMemories sharedMemories) {
         // Stop pillaring logic
         // Pop latest pillar blocks from memory
         // And delete it
@@ -488,7 +514,7 @@ public class WoodcutterBrain extends WorkerBrain {
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, lastBlock);
             // Move villager to the last block
             villager.setPos(villager.getX(), lastBlock.getY() + 1, villager.getZ());
-            startBreakingBlock(villager, world, lastBlock);
+            startBreakingBlock(villager, world, lastBlock, sharedMemories);
         } else {
             // No more pillar blocks, stop pillaring
             setJobStatus(villager, "idle");

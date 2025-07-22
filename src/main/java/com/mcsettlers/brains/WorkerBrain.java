@@ -13,6 +13,7 @@ import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.ChestAnimationHelper;
 import com.mcsettlers.utils.RadiusGenerator;
+import com.mcsettlers.utils.SharedMemories;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -64,17 +65,24 @@ public class WorkerBrain {
         return items;
     }
 
-    public void initCustomBrain(VillagerEntity villager, ServerWorld world) {
+    public void initCustomBrain(VillagerEntity villager, ServerWorld world, SharedMemories sharedMemories) {
         // Initialize the custom brain for the villager
         // Read memory values
         Brain<?> brain = villager.getBrain();
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
                 .map(GlobalPos::pos)
                 .orElse(null);
-        findDepositChest(world, workstation);
+        findDepositChest(world, workstation, sharedMemories);
+        Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
+        BlockPos targetBlock = optionalTarget != null ? optionalTarget.orElse(null) : null;
+        if (!sharedMemories.reserveTargetBlock(world, villager, targetBlock)) {
+            MCSettlers.LOGGER.warn("[WorkerBrain] Villager {} could not reserve target block {} for breaking.",
+                    MCSettlers.workerToString(villager), targetBlock);
+            brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
+        }
     }
 
-    public void tick(VillagerEntity villager, ServerWorld world) {
+    public void tick(VillagerEntity villager, ServerWorld world, SharedMemories sharedMemories) {
         // Skip every other tick to reduce load
         if (world.getTime() % 2 != 0) {
             return;
@@ -135,8 +143,15 @@ public class WorkerBrain {
         BlockPos workstation = brain.getOptionalMemory(MemoryModuleType.JOB_SITE)
                 .map(GlobalPos::pos)
                 .orElse(null);
-        Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
-        BlockPos targetBlock = optionalTarget != null ? optionalTarget.orElse(null) : null;
+
+        BlockPos targetBlock = sharedMemories.getTargetBlock(world, villager);
+        if (targetBlock == null) {
+            // Also check memory for target block
+            Optional<BlockPos> optionalTarget = brain.getOptionalMemory(ModMemoryModules.TARGET_BREAK_BLOCK);
+            if (optionalTarget.isPresent()) {
+                targetBlock = optionalTarget.get();
+            }
+        }
 
         if (workstation == null) {
             if (!(this instanceof CarrierBrain)) {
@@ -150,7 +165,7 @@ public class WorkerBrain {
         // return;
         // }
 
-        handleJob(villager, world, jobStatus, workstation, targetBlock);
+        handleJob(villager, world, jobStatus, workstation, targetBlock, sharedMemories);
 
         long tickEnd = System.nanoTime();
         if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
@@ -351,14 +366,14 @@ public class WorkerBrain {
 
     protected void handleJob(
             VillagerEntity villager, ServerWorld world,
-            String jobStatus, BlockPos workstation, BlockPos targetLog) {
+            String jobStatus, BlockPos workstation, BlockPos targetLog, SharedMemories sharedMemories) {
 
         if (jobStatus.equals("walking")) {
             return;
         } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
         } else if (jobStatus.equals("deposit_items")) {
-            keepDepositingItems(villager, world, workstation);
+            keepDepositingItems(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
         }
@@ -392,25 +407,11 @@ public class WorkerBrain {
 
     }
 
-    protected Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation) {
-        // Read all other villagers' deposit chests
-        Set<BlockPos> otherPositions = new HashSet<>();
-        for (VillagerEntity otherVillager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER,
-                v -> true)) {
-            Brain<?> otherBrain = otherVillager.getBrain();
-            Optional<BlockPos> otherChestPos = otherBrain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
-            if (otherChestPos.isPresent()) {
-                BlockPos pos = otherChestPos.get();
-                otherPositions.add(pos);
-            }
-        }
-        MCSettlers.LOGGER.info("[WorkerBrain] Found {} other deposit chests: {}", otherPositions.size(),
-                otherPositions.stream().map(BlockPos::toShortString).collect(Collectors.joining(", ")));
-
+    protected Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
         int searchRadius = 10;
         for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, searchRadius)) {
             // Skip if this position is already used by another villager
-            if (otherPositions.contains(pos)) {
+            if (!sharedMemories.depositChestIsAvailable(world, pos)) {
                 continue;
             }
             BlockState state = world.getBlockState(pos);
@@ -520,14 +521,15 @@ public class WorkerBrain {
         setJobStatus(villager, "picking_up_blocks");
     }
 
-    protected Optional<BlockPos> getDepositChest(VillagerEntity villager, ServerWorld world, BlockPos workstation) {
+    protected Optional<BlockPos> getDepositChest(VillagerEntity villager, ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
         Brain<?> brain = villager.getBrain();
         // Find a chest to deposit items
         Optional<BlockPos> chestPos = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
         if (chestPos.isEmpty() || !world.getBlockState(chestPos.get()).isOf(Blocks.CHEST)) {
-            chestPos = findDepositChest(world, workstation);
+            chestPos = findDepositChest(world, workstation, sharedMemories);
             if (chestPos.isPresent()) {
                 brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
+                sharedMemories.reserveDepositChest(world, villager, chestPos.get());
             } else {
                 MCSettlers.LOGGER
                         .info("[WorkerBrain] No nearby chest found for villager " + MCSettlers.workerToString(villager));
@@ -540,9 +542,9 @@ public class WorkerBrain {
     }
 
     protected void startDepositingItems(
-            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
 
-        Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation);
+        Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation, sharedMemories);
         if (optionalChestPos.isEmpty()) {
             // No chest found, set job status to no_work
             setJobStatus(villager, "no_work_no_chest");
@@ -558,13 +560,13 @@ public class WorkerBrain {
     }
 
     protected void keepDepositingItems(
-            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
 
         if (!reallyReachedTarget(world, villager)) {
             return;
         }
 
-        Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation);
+        Optional<BlockPos> optionalChestPos = getDepositChest(villager, world, workstation, sharedMemories);
         if (optionalChestPos.isEmpty()) {
             // No chest found, set job status to no_work
             setJobStatus(villager, "no_work_no_chest");
@@ -607,6 +609,9 @@ public class WorkerBrain {
     }
 
     protected void lookAtBlock(VillagerEntity villager, BlockPos target) {
+        if (target == null) {
+            return; // No target to look at
+        }
         Vec3d eyePos = villager.getPos().add(0, villager.getStandingEyeHeight(), 0);
         Vec3d targetCenter = Vec3d.ofCenter(target);
         Vec3d dir = targetCenter.subtract(eyePos);
@@ -668,6 +673,9 @@ public class WorkerBrain {
     }
 
     protected int blockBreakTime(BlockPos targetLog, VillagerEntity villager) {
+        if (targetLog == null) {
+            return Integer.MAX_VALUE; // No target log to check
+        }
         ItemStack heldItem = villager.getStackInHand(net.minecraft.util.Hand.MAIN_HAND);
         BlockState state = villager.getWorld().getBlockState(targetLog);
 

@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableSet;
 import com.mcsettlers.MCSettlers;
 import com.mcsettlers.ModMemoryModules;
 import com.mcsettlers.utils.RadiusGenerator;
+import com.mcsettlers.utils.SharedMemories;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
@@ -31,7 +32,7 @@ public class ForesterBrain extends WorkerBrain {
     @Override
     protected void handleJob(
             VillagerEntity villager, ServerWorld world,
-            String jobStatus, BlockPos workstation, BlockPos targetLog) {
+            String jobStatus, BlockPos workstation, BlockPos targetLog, SharedMemories sharedMemories) {
 
         Brain<?> brain = villager.getBrain();
 
@@ -43,7 +44,7 @@ public class ForesterBrain extends WorkerBrain {
         } else if (jobStatus.equals("picking_up_blocks")) {
             keepPickingUpBlocks(villager, world, workstation);
         } else if (jobStatus.equals("deposit_items")) {
-            keepDepositingItems(villager, world, workstation);
+            keepDepositingItems(villager, world, workstation, sharedMemories);
         } else if (jobStatus.equals("stop_deposit_items")) {
             stopDepositingItems(villager, world, workstation);
             // If inventory is empty, set to no_work
@@ -62,7 +63,7 @@ public class ForesterBrain extends WorkerBrain {
                 brain.remember(ModMemoryModules.NO_WORK_UNTIL_TICK, now + 100); // 10 seconds
             } else if (now >= noWorkUntil.get()) {
                 brain.forget(ModMemoryModules.NO_WORK_UNTIL_TICK);
-                startDepositingItems(villager, world, workstation);
+                startDepositingItems(villager, world, workstation, sharedMemories);
             }
         } else if (jobStatus.equals("planting")) {
             lookAtBlock(villager, targetLog);
@@ -71,9 +72,9 @@ public class ForesterBrain extends WorkerBrain {
         } else if (jobStatus.equals("idle")) {
             // If inventory is empty, deposit items
             if (villager.getInventory().isEmpty()) {
-                startDepositingItems(villager, world, workstation);
+                startDepositingItems(villager, world, workstation, sharedMemories);
             } else {
-                findNewPlantingTarget(villager, world, workstation);
+                findNewPlantingTarget(villager, world, workstation, sharedMemories);
             }
         } else {
             MCSettlers.LOGGER.warn("[Forester] Unknown job status: " + jobStatus);
@@ -82,7 +83,7 @@ public class ForesterBrain extends WorkerBrain {
     }
 
     protected void findNewPlantingTarget(
-            VillagerEntity villager, ServerWorld world, BlockPos workstation) {
+            VillagerEntity villager, ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
         MCSettlers.LOGGER.info("Finding new planting target for villager: {}", MCSettlers.workerToString(villager));
         int r2 = 15 * 15;
         // Logic to find a new planting target
@@ -120,6 +121,9 @@ public class ForesterBrain extends WorkerBrain {
         });
         Brain<?> brain = villager.getBrain();
         for (BlockPos pos : villagerRadiusCoords) {
+            if (!sharedMemories.reserveTargetBlock(world, villager, pos)) {
+                continue; // Skip if the target block is already reserved
+            }
             brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, pos.up());
 
             // Walk to the position above the dirt block
