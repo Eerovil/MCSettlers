@@ -188,11 +188,9 @@ public class SharedMemories {
             }
         }
 
-        MCSettlers.LOGGER.info("Refreshed deposit chest values: {}", depositChestValuesList.size());
     }
 
     public PriorityQueue<DepositChestValues> getDepositChestValuesNear(ServerWorld world, BlockPos pos, Comparator<DepositChestValues> sortFunc) {
-        MCSettlers.LOGGER.info("Getting deposit chest values near {}, size: {}", pos.toShortString(), depositChestValuesList.size());
         PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(sortFunc);
         for (DepositChestValues depositChestValues : depositChestValuesList) {
             queue.add(depositChestValues);

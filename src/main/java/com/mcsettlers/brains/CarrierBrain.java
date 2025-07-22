@@ -104,7 +104,7 @@ public class CarrierBrain extends WorkerBrain {
                 comparator);
 
         Brain<?> brain = villager.getBrain();
-        MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", nearChests.size(), MCSettlers.workerToString(villager));
+        // MCSettlers.LOGGER.info("Found {} deposit chests for villager: {}", nearChests.size(), MCSettlers.workerToString(villager));
         // Print values for each deposit chest
         for (DepositChestValues chestValuesFrom : nearChests) {
             for (DepositChestValues chestValuesTo : emptyNearChests) {
@@ -119,7 +119,7 @@ public class CarrierBrain extends WorkerBrain {
                     for (Item item : chestValuesFrom.containedItems) {
                         if (chestValuesTo.wantedItems.contains(item)) {
                             itemToCarry = item;
-                            MCSettlers.LOGGER.info("Found item to carry: {} for villager: {}", itemToCarry,
+                            MCSettlers.LOGGER.info("carry: {} for: {}", itemToCarry,
                                     MCSettlers.workerToString(villager));
                             break; // Found an item to carry, no need to check further
                         }
@@ -128,8 +128,8 @@ public class CarrierBrain extends WorkerBrain {
                     if (itemToCarry == null) {
                         continue;
                     }
-                    MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", MCSettlers.workerToString(villager),
-                            chestValuesTo.pos);
+                    // MCSettlers.LOGGER.info("Found suitable deposit chest for villager: {} -> {}", MCSettlers.workerToString(villager),
+                    //         chestValuesTo.pos);
                     brain.remember(ModMemoryModules.TARGET_BREAK_BLOCK, chestValuesFrom.pos);
                     brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestValuesTo.pos);
                     brain.remember(ModMemoryModules.ITEM_TO_CARRY, Registries.ITEM.getEntry(itemToCarry));
@@ -141,7 +141,7 @@ public class CarrierBrain extends WorkerBrain {
             }
         }
         // If no suitable deposit chest found, set job status to no work
-        MCSettlers.LOGGER.info("No suitable deposit chest found for villager: {}", MCSettlers.workerToString(villager));
+        // MCSettlers.LOGGER.info("No suitable deposit chest found for villager: {}", MCSettlers.workerToString(villager));
         setJobStatus(villager, "no_work_no_chest");
         brain.forget(ModMemoryModules.TARGET_BREAK_BLOCK);
         brain.forget(ModMemoryModules.DEPOSIT_CHEST);

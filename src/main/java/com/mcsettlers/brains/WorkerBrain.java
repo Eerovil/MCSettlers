@@ -93,7 +93,7 @@ public class WorkerBrain {
             return;
         }
 
-        long tickStart = System.nanoTime();
+        // long tickStart = System.nanoTime();
         Brain<?> brain = villager.getBrain();
 
         Optional<String> optionalJobStatus = brain.getOptionalMemory(ModMemoryModules.JOB_STATUS);
@@ -185,11 +185,11 @@ public class WorkerBrain {
 
         handleJob(villager, world, jobStatus, workstation, targetBlock, sharedMemories);
 
-        long tickEnd = System.nanoTime();
-        if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
-            MCSettlers.LOGGER
-                    .info("[WorkerBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
-        }
+        // long tickEnd = System.nanoTime();
+        // if (tickEnd - tickStart > 500_000) { // Only log if tick is slow (>0.5ms)
+        //     MCSettlers.LOGGER
+        //             .info("[WorkerBrain] " + jobStatus + " tick took " + ((tickEnd - tickStart) / 1000) + "us");
+        // }
     }
 
     protected void startHoldingItem(
@@ -326,15 +326,11 @@ public class WorkerBrain {
             return false; // Position below must be solid
         }
         if (world.getBlockState(pos).isSolidBlock(world, pos) || !world.getBlockState(pos).getCollisionShape(world, pos).isEmpty()) {
-            MCSettlers.LOGGER.warn("{} is solid", world.getBlockState(pos).toString());
             return false;
         }
-        MCSettlers.LOGGER.info("Not solid: {}", world.getBlockState(pos).toString());
         if (world.getBlockState(pos.up()).isSolidBlock(world, pos.up()) || !world.getBlockState(pos.up()).getCollisionShape(world, pos.up()).isEmpty()) {
-            MCSettlers.LOGGER.warn("{} is solid above", world.getBlockState(pos.up()).toString());
             return false;
         }
-        MCSettlers.LOGGER.info("Found good position: {}: {}", pos.toShortString(), world.getBlockState(pos).toString());
         return true;
     }
 
@@ -348,8 +344,8 @@ public class WorkerBrain {
             // Check blocks around the position, and close to villager
             for (BlockPos newPos : RadiusGenerator.radiusCoordinates(pos, villager.getBlockPos(), 3)) {
                 if (checkPositionIsWalkable(villager, world, newPos) && !notAllowedPositions.contains(newPos)) {
-                    MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
-                            newPos.toShortString());
+                    // MCSettlers.LOGGER.info("[WorkerBrain] Found walkable position: {}",
+                    //         newPos.toShortString());
                     return newPos;
                 }
             }
@@ -423,8 +419,7 @@ public class WorkerBrain {
         customName = Text.of(uuidPart + " " + customName.getString());
         villager.setCustomName(customName);
         villager.setCustomNameVisible(true);
-        MCSettlers.LOGGER.info("[WorkerBrain] Set job status to " + status + " for villager "
-                + MCSettlers.workerToString(villager));
+        MCSettlers.LOGGER.info(MCSettlers.workerToString(villager) + ": " + status);
 
     }
 
@@ -510,8 +505,8 @@ public class WorkerBrain {
                 }
             }
         }
-        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} current tool speed: {}",
-                MCSettlers.workerToString(villager), currentToolSpeed);
+        // MCSettlers.LOGGER.info("[WorkerBrain] Villager {} current tool speed: {}",
+        //         MCSettlers.workerToString(villager), currentToolSpeed);
         Set<Item> betterTools = new HashSet<>();
         for (TagKey<Item> tag : WANTED_ITEM_TAGS) {
             for (RegistryEntry<Item> entry : Registries.ITEM.iterateEntries(tag)) {
@@ -526,8 +521,8 @@ public class WorkerBrain {
                 }
             }
         }
-        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found better tools than current: {}",
-                MCSettlers.workerToString(villager), betterTools.stream().map(Item::toString).collect(Collectors.joining(", ")));
+        // MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found better tools than current: {}",
+        //         MCSettlers.workerToString(villager), betterTools.stream().map(Item::toString).collect(Collectors.joining(", ")));
         return betterTools;
     }
 
@@ -563,14 +558,14 @@ public class WorkerBrain {
         // Find the best axe in the chest
         Optional<Item> optionalBestAxe = selectBestToolFromChest(world, chest, villager, workstation);
         if (optionalBestAxe.isEmpty()) {
-            MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found no better axe than in chest.",
-                    MCSettlers.workerToString(villager));
+            // MCSettlers.LOGGER.info("[WorkerBrain] Villager {} found no better axe than in chest.",
+            //         MCSettlers.workerToString(villager));
             return; // No better axe found, nothing to do
         }
         Item bestAxe = optionalBestAxe.get();
         // Set the best axe in the villager's hand
-        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} took best axe from chest: {}", MCSettlers.workerToString(villager),
-                bestAxe);
+        // MCSettlers.LOGGER.info("[WorkerBrain] Villager {} took best axe from chest: {}", MCSettlers.workerToString(villager),
+        //         bestAxe);
         // Remove the axe from the chest
         takeItemFromChest(chest, villager, bestAxe);
         startHoldingItem(villager, bestAxe);
@@ -635,7 +630,7 @@ public class WorkerBrain {
                 brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
             } else {
                 MCSettlers.LOGGER
-                        .info("[WorkerBrain] No nearby chest found for villager " + MCSettlers.workerToString(villager));
+                        .warn("[WorkerBrain] No nearby chest found for villager " + MCSettlers.workerToString(villager));
                 setJobStatus(villager, "no_work_no_chest");
                 return Optional.empty();
             }
@@ -658,8 +653,6 @@ public class WorkerBrain {
         walkToPosition(villager, world, pos, 0.6F);
 
         setJobStatus(villager, "deposit_items");
-        MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to deposit items at {}", MCSettlers.workerToString(villager),
-                pos);
     }
 
     protected void keepDepositingItems(
@@ -764,13 +757,11 @@ public class WorkerBrain {
                 net.minecraft.entity.ItemEntity targetItem = items.get(0);
                 BlockPos itemPos = targetItem.getBlockPos();
                 walkToPosition(villager, world, itemPos, 0.6F);
-                MCSettlers.LOGGER.info("[WorkerBrain] Villager {} walking to gatherable item {} at {}",
-                        MCSettlers.workerToString(villager), targetItem.getStack().getItem(), itemPos);
                 return;
             }
         }
-        MCSettlers.LOGGER.info("[WorkerBrain] No gatherable items found in radius " + searchRadius + " around "
-                + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+        // MCSettlers.LOGGER.info("[WorkerBrain] No gatherable items found in radius " + searchRadius + " around "
+        //         + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
         // If no item found, set job status to idle
         setJobStatus(villager, "idle");
     }

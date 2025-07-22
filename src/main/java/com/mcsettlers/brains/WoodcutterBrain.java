@@ -163,7 +163,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
             setJobStatus(villager, "walking");
         } else {
-            MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found in radius " + searchRadius + " around " + villagerPos.toShortString());
+            MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found");
             setJobStatus(villager, "no_work_no_logs");
         }
     }
@@ -351,8 +351,7 @@ public class WoodcutterBrain extends WorkerBrain {
 
         // If no logs in range, just give up
         if (!anyLogs) {
-            MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found in radius " + radius + " around "
-                    + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+            MCSettlers.LOGGER.info("[WoodcutterBrain] No logs found");
             return null;
         }
 
@@ -383,8 +382,7 @@ public class WoodcutterBrain extends WorkerBrain {
         }
 
         // If no logs or leaves found, return null
-        MCSettlers.LOGGER.info("[WoodcutterBrain] No logs or leaves found in radius " + radius + " around "
-                + villagerPos.toShortString() + " or workstation " + workstation.toShortString());
+        MCSettlers.LOGGER.info("[WoodcutterBrain] No logs or leaves found");
         return null;
 
     }
