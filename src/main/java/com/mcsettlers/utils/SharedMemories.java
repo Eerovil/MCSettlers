@@ -15,6 +15,7 @@ import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
@@ -123,61 +124,67 @@ public class SharedMemories {
         return depositChestsMap;
     }
 
-    public void refreshDepositChestValues(ServerWorld world) {
+    public void refreshDepositChestValues(MinecraftServer server) {
         // This method should refresh the deposit chest values from the world
         // For now, it's a placeholder
         // In a real implementation, you would query the world for all deposit chests and their contents
+        depositChestValuesList.clear();
 
-        // Get a list of all deposit chests for all villagers
-        for (Map.Entry<BlockPos, VillagerEntity> entry : depositChestsInWorld(world).entrySet()) {
-            BlockPos chestPos = entry.getKey();
-            VillagerEntity otherVillager = entry.getValue();
+        for (ServerWorld world : server.getWorlds()) {
+            // Get a list of all deposit chests for all villagers
+            for (Map.Entry<BlockPos, VillagerEntity> entry : depositChestsInWorld(world).entrySet()) {
+                BlockPos chestPos = entry.getKey();
+                VillagerEntity otherVillager = entry.getValue();
 
-            DepositChestValues depositChestValues = new DepositChestValues();
-            depositChestValues.dimension = world.getRegistryKey();
-            depositChestValues.pos = chestPos;
-            WorkerBrain workerBrain = MCSettlers.getBrainFor(otherVillager.getVillagerData().profession());
-            depositChestValues.wantedItems = new HashSet<>();
-            depositChestValues.containedItems = new HashSet<>();
-            Set<Item> otherVillgerWantedItems = workerBrain.getWantedItems(otherVillager);
-            MCSettlers.LOGGER.info("otherVillagerWantedItems: {}", otherVillgerWantedItems);
+                DepositChestValues depositChestValues = new DepositChestValues();
+                depositChestValues.dimension = world.getRegistryKey();
+                depositChestValues.pos = chestPos;
+                WorkerBrain workerBrain = MCSettlers.getBrainFor(otherVillager.getVillagerData().profession());
+                depositChestValues.wantedItems = new HashSet<>();
+                depositChestValues.containedItems = new HashSet<>();
+                Set<Item> otherVillagerWantedItems = workerBrain.getWantedItems(otherVillager);
 
-            BlockEntity chest = world.getBlockEntity(depositChestValues.pos);
-            if (chest instanceof ChestBlockEntity) {
-                ChestBlockEntity chestEntity = (ChestBlockEntity) chest;
-                for (int i = 0; i < chestEntity.size(); i++) {
-                    ItemStack stack = chestEntity.getStack(i);
-                    if (stack.isEmpty()) {
-                        // Add all items in WANTED_ITEMS to wantedItems, since there is emty slot
-                        for (Item wantedItem : otherVillgerWantedItems) {
-                            depositChestValues.wantedItems.add(wantedItem);
-                        }
-                        continue; // Skip empty slots
-                    }
-
-                    Item item = stack.getItem();
-                    depositChestValues.containedItems.add(item);
-
-                    // Check if the item is wanted by the worker brain
-                    for (Item wantedItem : otherVillgerWantedItems) {
-                        if (stack.getItem() == wantedItem) {
-                            // If stack is not full, add to wanted items
-                            if (stack.getCount() < stack.getMaxCount()) {
-                                depositChestValues.wantedItems.add(item);
+                BlockEntity chest = world.getBlockEntity(depositChestValues.pos);
+                if (chest instanceof ChestBlockEntity) {
+                    ChestBlockEntity chestEntity = (ChestBlockEntity) chest;
+                    for (int i = 0; i < chestEntity.size(); i++) {
+                        ItemStack stack = chestEntity.getStack(i);
+                        if (stack.isEmpty()) {
+                            // Add all items in WANTED_ITEMS to wantedItems, since there is emty slot
+                            for (Item wantedItem : otherVillagerWantedItems) {
+                                depositChestValues.wantedItems.add(wantedItem);
                             }
-                            break;
+                            continue; // Skip empty slots
+                        }
+
+                        Item item = stack.getItem();
+                        depositChestValues.containedItems.add(item);
+
+                        // Check if the item is wanted by the worker brain
+                        for (Item wantedItem : otherVillagerWantedItems) {
+                            if (stack.getItem() == wantedItem) {
+                                // If stack is not full, add to wanted items
+                                if (stack.getCount() < stack.getMaxCount()) {
+                                    depositChestValues.wantedItems.add(item);
+                                }
+                                break;
+                            }
                         }
                     }
+                } else {
+                    MCSettlers.LOGGER.warn("Deposit chest at {} is not a ChestBlockEntity", depositChestValues.pos);
                 }
+                // Delete all wanted items from contained items
+                depositChestValues.containedItems.removeAll(depositChestValues.wantedItems);
+                depositChestValuesList.add(depositChestValues);
             }
-            // Delete all wanted items from contained items
-            depositChestValues.containedItems.removeAll(depositChestValues.wantedItems);
-            depositChestValuesList.add(depositChestValues);
         }
+
+        MCSettlers.LOGGER.info("Refreshed deposit chest values: {}", depositChestValuesList.size());
     }
 
     public PriorityQueue<DepositChestValues> getDepositChestValuesNear(ServerWorld world, BlockPos pos) {
-        
+        MCSettlers.LOGGER.info("Getting deposit chest values near {}, size: {}", pos.toShortString(), depositChestValuesList.size());
         PriorityQueue<DepositChestValues> queue = new PriorityQueue<>(
                 Comparator.comparingDouble(p -> p.pos.getSquaredDistance(pos)));
         for (DepositChestValues depositChestValues : depositChestValuesList) {

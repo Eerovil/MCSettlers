@@ -62,9 +62,11 @@ public class MCSettlers implements ModInitializer {
 		ModPOIs.register();
 		ModMemoryModules.register();
 		ModProfessions.register();
-		
-
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			// Every 10 ticks, we run refreshDepositChestValues
+			if (server.getTicks() % 10 == 0) {
+				sharedMemories.refreshDepositChestValues(server);
+			}
 			for (ServerWorld world : server.getWorlds()) {
 				// Use getEntitiesByType for all loaded villagers
 				for (VillagerEntity villager : world.getEntitiesByType(net.minecraft.entity.EntityType.VILLAGER,

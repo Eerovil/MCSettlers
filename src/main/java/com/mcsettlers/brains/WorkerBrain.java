@@ -153,6 +153,19 @@ public class WorkerBrain {
             }
         }
 
+        BlockPos depositChest = sharedMemories.getDepositChest(world, villager, workstation);
+        if (!(this instanceof CarrierBrain) && depositChest == null) {
+            // Also check memory for deposit chest
+            Optional<BlockPos> optionalDepositChest = brain.getOptionalMemory(ModMemoryModules.DEPOSIT_CHEST);
+            if (optionalDepositChest.isPresent()) {
+                if (!sharedMemories.reserveDepositChest(world, villager, optionalDepositChest.get())) {
+                    MCSettlers.LOGGER.warn("[WorkerBrain] Villager " + MCSettlers.workerToString(villager)
+                            + " could not reserve deposit chest: " + optionalDepositChest.get());
+                    brain.forget(ModMemoryModules.DEPOSIT_CHEST);
+                }
+            }
+        }
+
         if (workstation == null) {
             if (!(this instanceof CarrierBrain)) {
                 return;
@@ -400,6 +413,9 @@ public class WorkerBrain {
                 customName = Text.of(customName.getString() + " (deposit at " + depositChest.toShortString() + ")");
             }
         }
+        // Prepend with a part of uuid
+        String uuidPart = villager.getUuid().toString().substring(0, 8);
+        customName = Text.of(uuidPart + " " + customName.getString());
         villager.setCustomName(customName);
         villager.setCustomNameVisible(true);
         MCSettlers.LOGGER.info("[WorkerBrain] Set job status to " + status + " for villager "
@@ -410,12 +426,12 @@ public class WorkerBrain {
     protected Optional<BlockPos> findDepositChest(ServerWorld world, BlockPos workstation, SharedMemories sharedMemories) {
         int searchRadius = 10;
         for (BlockPos pos : RadiusGenerator.radiusCoordinates(workstation, searchRadius)) {
-            // Skip if this position is already used by another villager
-            if (!sharedMemories.depositChestIsAvailable(world, pos)) {
-                continue;
-            }
             BlockState state = world.getBlockState(pos);
             if (state.isOf(Blocks.CHEST)) {
+                // Skip if this position is already used by another villager
+                if (!sharedMemories.depositChestIsAvailable(world, pos)) {
+                    continue;
+                }
                 MCSettlers.LOGGER.info("[WorkerBrain] Found deposit chest at {}", pos.toShortString());
                 return Optional.of(pos);
             }
@@ -528,8 +544,11 @@ public class WorkerBrain {
         if (chestPos.isEmpty() || !world.getBlockState(chestPos.get()).isOf(Blocks.CHEST)) {
             chestPos = findDepositChest(world, workstation, sharedMemories);
             if (chestPos.isPresent()) {
+                if (!sharedMemories.reserveDepositChest(world, villager, chestPos.get())) {
+                    setJobStatus(villager, "no_work_chest_reserved");
+                    return Optional.empty(); // Chest is already reserved by another villager
+                }
                 brain.remember(ModMemoryModules.DEPOSIT_CHEST, chestPos.get());
-                sharedMemories.reserveDepositChest(world, villager, chestPos.get());
             } else {
                 MCSettlers.LOGGER
                         .info("[WorkerBrain] No nearby chest found for villager " + MCSettlers.workerToString(villager));
